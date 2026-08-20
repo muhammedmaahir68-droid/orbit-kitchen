@@ -1,0 +1,25 @@
+INFO:     Started server process [573]
+INFO:     Waiting for application startup.
+Seeded restaurant=23ea700e-3210-4e8c-a593-25be3599965e branch=890f0123-3bb6-42ef-899b-46efa6dde6bf
+Table IDs: ['cbd73344-bd6f-4d28-bc81-08b0299d1c61', 'ddac7ef2-5815-4c24-bbf8-2ad4f1567c38', '69246a51-ebca-4493-904f-575ebfaff7e7', '60a9b0c0-d50b-4764-9c3d-5ca01c83d800', '7964f89b-e028-453c-86af-f4feb5f76523']
+Menu item IDs: [('Chicken Biryani', '9e6e1972-646b-4270-9bb3-fba7b74b0745'), ('French Fries', '378c9d82-3032-4e60-a46e-0bb64e1e1809'), ('Lime Juice', '0c004c4b-918a-4882-acb7-a9c811130805'), ('Ice Cream', '4ebcebee-70c4-418e-a30d-1c9cfdc306f3')]
+Demo logins: kitchen/kitchen123, cashier/cashier123
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:38384 - "GET /app/index.html HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38388 - "GET /app/manifest.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38402 - "GET /app/sw.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38410 - "POST /api/v1/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38412 - "POST /api/v1/auth/login HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:38418 - "POST /api/v1/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38430 - "GET /api/v1/auth/session?token=OWNlNjMxYTgtMjgyZS00MGE5LWIwY2EtOWQ1Y2I5Mzc4ZTBjOjg5MGYwMTIzLTNiYjYtNDJlZi04OTliLTQ2ZWZhNmRkZTZiZjpDQVNISUVSOjE3ODcyMjQ0NDY6YTVkYjkyNWExNzIxMGFmMg HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38436 - "GET /api/v1/tables/cbd73344-bd6f-4d28-bc81-08b0299d1c61/qr-token HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38452 - "GET /api/v1/tables/resolve?token=ODkwZjAxMjMtM2JiNi00MmVmLTg5OWItNDZlZmE2ZGRlNmJmOmNiZDczMzQ0LWJkNmYtNGQyOC1iYzgxLTA4YjAyOTlkMWM2MTo4YzdlOWJlYjFiNDFkMzcz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38454 - "POST /api/v1/orders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38456 - "PATCH /api/v1/orders/4d60081b-4477-43cf-b746-399a0317cf66/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38466 - "PATCH /api/v1/orders/4d60081b-4477-43cf-b746-399a0317cf66/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38470 - "PATCH /api/v1/orders/4d60081b-4477-43cf-b746-399a0317cf66/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38478 - "PATCH /api/v1/orders/4d60081b-4477-43cf-b746-399a0317cf66/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38490 - "GET /api/v1/kitchen/tasks?branch_id=890f0123-3bb6-42ef-899b-46efa6dde6bf HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38506 - "GET /api/v1/orders?branch_id=890f0123-3bb6-42ef-899b-46efa6dde6bf HTTP/1.1" 200 OK
+INFO:     Shutting down

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.db
+.env
+venv/
+table_qr_codes/
+.DS_Store

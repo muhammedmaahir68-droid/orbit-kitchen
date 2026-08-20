@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ORBIT</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#0b0e14" />
+<link rel="icon" href="icon.svg" />
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#12161f; --panel2:#171c27; --border:#232938;
+    --text:#e6e9ef; --muted:#8b93a7; --accent:#ff7a45; --done:#2ecc71; --warn:#ffcc4d;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .hidden { display:none !important; }
+  .btn { padding:14px; border:none; border-radius:10px; background:var(--accent); color:#111; font-weight:700; font-size:15px; cursor:pointer; }
+  .btn.secondary { background:var(--panel2); color:var(--text); border:1px solid var(--border); }
+  input { background:var(--panel2); border:1px solid var(--border); color:var(--text); padding:12px; border-radius:8px; font-size:14px; width:100%; }
+
+  /* ---------- LOGIN ---------- */
+  #loginView { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .login-card { width:100%; max-width:360px; background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:28px; }
+  .login-card h1 { text-align:center; margin:0 0 4px; font-size:22px; }
+  .login-card h1 span { color:var(--accent); }
+  .login-card p.sub { text-align:center; color:var(--muted); font-size:13px; margin:0 0 24px; }
+  .role-tabs { display:flex; gap:8px; margin-bottom:20px; }
+  .role-tabs button { flex:1; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--panel2); color:var(--muted); font-size:12px; cursor:pointer; }
+  .role-tabs button.active { background:var(--accent); color:#111; border-color:var(--accent); font-weight:700; }
+  .field { margin-bottom:12px; }
+  .field label { font-size:11px; color:var(--muted); display:block; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px; }
+  #loginErr { color:#ff6b6b; font-size:12px; text-align:center; margin-top:10px; min-height:16px; }
+  #customerNotice { text-align:center; color:var(--muted); font-size:13px; padding:20px 0; }
+
+  /* ---------- SHARED APP CHROME ---------- */
+  header.appbar { position:sticky; top:0; z-index:10; background:var(--bg); border-bottom:1px solid var(--border); padding:14px 20px; display:flex; justify-content:space-between; align-items:center; }
+  header.appbar h1 { font-size:15px; margin:0; }
+  header.appbar h1 span { color:var(--accent); }
+  header.appbar .right { display:flex; align-items:center; gap:10px; font-size:12px; color:var(--muted); }
+  header.appbar button.logout { background:none; border:1px solid var(--border); color:var(--muted); padding:6px 12px; border-radius:6px; font-size:11px; cursor:pointer; }
+
+  /* ---------- CONSUMER ---------- */
+  #consumerView main { padding:16px; padding-bottom:90px; }
+  .category { font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:20px 0 10px; }
+  .item { display:flex; justify-content:space-between; align-items:center; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px; }
+  .item .name { font-weight:600; font-size:15px; }
+  .item .price { color:var(--muted); font-size:13px; margin-top:2px; }
+  .qty { display:flex; align-items:center; gap:10px; }
+  .qty button { width:30px; height:30px; border-radius:50%; border:1px solid var(--border); background:var(--panel2); color:var(--text); font-size:16px; cursor:pointer; }
+  .qty button.add { background:var(--accent); color:#111; border:none; font-weight:700; }
+  .qty span { min-width:16px; text-align:center; font-size:14px; }
+  #cartBar { position:fixed; bottom:0; left:0; right:0; background:var(--accent); color:#111; padding:16px 20px; display:none; justify-content:space-between; align-items:center; font-weight:700; cursor:pointer; }
+  .sheet { position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none; align-items:flex-end; z-index:20; }
+  .sheet.open { display:flex; }
+  .sheet-content { background:var(--panel); border-radius:16px 16px 0 0; padding:20px; width:100%; max-height:80vh; overflow-y:auto; }
+  .cart-line { display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); font-size:14px; }
+  .total-line { display:flex; justify-content:space-between; padding:14px 0; font-weight:700; font-size:16px; }
+  #eta { font-size:13px; color:var(--muted); text-align:center; margin:10px 0; }
+  .order-header { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px; }
+  .order-header .code { font-size:20px; font-weight:700; letter-spacing:1px; }
+  .order-header .total { color:var(--muted); font-size:13px; margin-top:4px; }
+  ul.timeline { list-style:none; margin:0; padding:0; }
+  ul.timeline li { display:flex; align-items:center; gap:10px; padding:10px 0; font-size:14px; color:var(--muted); border-bottom:1px solid var(--border); }
+  ul.timeline li.done { color:var(--text); }
+  ul.timeline li.current { color:var(--accent); font-weight:600; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--border); flex-shrink:0; }
+  li.done .dot { background:var(--done); }
+  li.current .dot { background:var(--accent); }
+
+  /* ---------- KITCHEN ---------- */
+  #kitchenView .toolbar { padding: 10px 20px; border-bottom:1px solid var(--border); background:var(--panel); }
+  #board { display:flex; gap:16px; padding:20px; overflow-x:auto; }
+  .station { min-width:280px; flex:1; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; }
+  .station h2 { font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0 0 12px 0; }
+  .task { background:var(--panel2); border:1px solid var(--border); border-left:4px solid #5b6478; border-radius:8px; padding:12px; margin-bottom:10px; }
+  .task.ACCEPTED { border-left-color:#3d7fff; }
+  .task.PREPARING { border-left-color:var(--accent); }
+  .task.READY { border-left-color:var(--done); opacity:0.6; }
+  .task .top { display:flex; justify-content:space-between; align-items:baseline; }
+  .task .item-name { font-weight:600; font-size:14px; }
+  .task .order-code { font-size:11px; color:var(--muted); }
+  .task .meta { font-size:11px; color:var(--muted); margin-top:4px; }
+  .task button { margin-top:10px; width:100%; padding:7px; border-radius:6px; border:none; background:var(--accent); color:#111; font-weight:600; font-size:12px; cursor:pointer; }
+  .empty { color:var(--muted); font-size:12px; padding:20px 0; text-align:center; }
+
+  /* ---------- CASHIER ---------- */
+  #summary { display:flex; gap:16px; padding:20px; }
+  .stat { flex:1; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; }
+  .stat .label { font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
+  .stat .value { font-size:26px; font-weight:700; margin-top:6px; }
+  #ordersTable { padding: 0 20px 20px; }
+  table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  th { text-align:left; font-size:11px; text-transform:uppercase; color:var(--muted); padding:12px 14px; border-bottom:1px solid var(--border); }
+  td { padding:12px 14px; font-size:13px; border-bottom:1px solid var(--border); }
+  .badge { font-size:10px; padding:3px 10px; border-radius:20px; background:var(--panel2); color:var(--muted); }
+  .badge.PAID, .badge.RESTAURANT_ACCEPTED, .badge.QUEUED { color:var(--warn); }
+  .badge.PREPARING, .badge.QUALITY_CHECK { color:var(--accent); }
+  .badge.READY, .badge.SERVED, .badge.COMPLETED { color:var(--done); }
+
+  #feed { margin: 0 20px 20px; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; font-family: ui-monospace, Menlo, monospace; font-size:11px; color:var(--muted); max-height:140px; overflow-y:auto; }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="loginView">
+  <div class="login-card">
+    <h1>ORBIT <span>Restaurant OS</span></h1>
+    <p class="sub">One app. Three roles.</p>
+
+    <div id="customerNotice" class="hidden">
+      Table detected — opening menu…
+    </div>
+
+    <div id="staffLogin">
+      <div class="role-tabs">
+        <button id="tabCustomer" class="active" onclick="showTab('customer')">Customer</button>
+        <button id="tabStaff" onclick="showTab('staff')">Staff Login</button>
+      </div>
+      <div id="customerTab">
+        <p style="text-align:center; color:var(--muted); font-size:13px;">Scan the QR code on your table to order.</p>
+      </div>
+      <div id="staffTab" class="hidden">
+        <div class="field"><label>Username</label><input id="loginUser" placeholder="kitchen or cashier" /></div>
+        <div class="field"><label>Password</label><input id="loginPass" type="password" placeholder="••••••••" /></div>
+        <button class="btn" style="width:100%" onclick="doLogin()">Log in</button>
+        <div id="loginErr"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CUSTOMER VIEW ============ -->
+<div id="consumerView" class="hidden">
+  <header class="appbar">
+    <h1>ORBIT <span>Order</span></h1>
+    <div class="right" id="tableBadge">Table —</div>
+  </header>
+  <main id="menuView"><div id="menuList"></div></main>
+  <main id="trackView" class="hidden"></main>
+  <div id="cartBar" onclick="openCart()">
+    <span id="cartCount">0 items</span>
+    <span id="cartTotal">₹0</span>
+  </div>
+  <div class="sheet" id="cartSheet">
+    <div class="sheet-content">
+      <h2>Your order</h2>
+      <div id="cartLines"></div>
+      <div class="total-line"><span>Total</span><span id="cartSheetTotal">₹0</span></div>
+      <div id="eta"></div>
+      <button class="btn" style="width:100%" onclick="placeOrder()">Confirm & Pay</button>
+      <button class="btn secondary" style="width:100%; margin-top:8px;" onclick="closeCart()">Keep browsing</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ KITCHEN VIEW ============ -->
+<div id="kitchenView" class="hidden">
+  <header class="appbar">
+    <h1>ORBIT <span>Kitchen</span></h1>
+    <div class="right">
+      <span id="kdsStatus">connecting…</span>
+      <button class="logout" onclick="enableSound()" id="soundBtn">🔇 Sound</button>
+      <button class="logout" onclick="logout()">Log out</button>
+    </div>
+  </header>
+  <div id="board"></div>
+  <div id="feed"></div>
+</div>
+
+<!-- ============ CASHIER VIEW ============ -->
+<div id="cashierView" class="hidden">
+  <header class="appbar">
+    <h1>ORBIT <span>Cashier</span></h1>
+    <div class="right">
+      <span id="cashierStatus">connecting…</span>
+      <button class="logout" onclick="logout()">Log out</button>
+    </div>
+  </header>
+  <div id="summary">
+    <div class="stat"><div class="label">Active Orders</div><div class="value" id="activeCount">0</div></div>
+    <div class="stat"><div class="label">Revenue (open + served)</div><div class="value" id="revenue">₹0</div></div>
+    <div class="stat"><div class="label">Ready for Pickup</div><div class="value" id="readyCount">0</div></div>
+  </div>
+  <div id="ordersTable">
+    <table>
+      <thead><tr><th>Order</th><th>Table</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>
+      <tbody id="ordersBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin.replace(/\/app.*$/, "");
+const WS = API.replace("http", "ws");
+const FLOW = ["CREATED","PAYMENT_PENDING","PAID","RESTAURANT_ACCEPTED","QUEUED","PREPARING","QUALITY_CHECK","READY","SERVED","COMPLETED"];
+function money(n) { return "₹" + n.toFixed(2); }
+
+// ============ ROUTER ============
+function showView(id) {
+  ["loginView","consumerView","kitchenView","cashierView"].forEach(v => {
+    document.getElementById(v).classList.toggle("hidden", v !== id);
+  });
+}
+
+function showTab(tab) {
+  document.getElementById("tabCustomer").classList.toggle("active", tab === "customer");
+  document.getElementById("tabStaff").classList.toggle("active", tab === "staff");
+  document.getElementById("customerTab").classList.toggle("hidden", tab !== "customer");
+  document.getElementById("staffTab").classList.toggle("hidden", tab !== "staff");
+}
+
+function logout() {
+  localStorage.removeItem("orbit_staff_token");
+  localStorage.removeItem("orbit_staff_role");
+  localStorage.removeItem("orbit_staff_branch");
+  location.href = location.pathname;
+}
+
+async function boot() {
+  const params = new URLSearchParams(window.location.search);
+  const tableToken = params.get("t");
+
+  if (tableToken) {
+    document.getElementById("customerNotice").classList.remove("hidden");
+    document.getElementById("staffLogin").classList.add("hidden");
+    initConsumer(tableToken);
+    return;
+  }
+
+  const staffToken = localStorage.getItem("orbit_staff_token");
+  if (staffToken) {
+    try {
+      const res = await fetch(`${API}/api/v1/auth/session?token=${encodeURIComponent(staffToken)}`);
+      if (res.ok) {
+        const claims = await res.json();
+        routeStaff(claims.role, claims.branch_id, staffToken);
+        return;
+      }
+    } catch (e) { /* fall through */ }
+    logout();
+    return;
+  }
+
+  showView("loginView");
+}
+
+async function doLogin() {
+  const username = document.getElementById("loginUser").value.trim();
+  const password = document.getElementById("loginPass").value;
+  const errEl = document.getElementById("loginErr");
+  errEl.textContent = "";
+  try {
+    const res = await fetch(`${API}/api/v1/auth/login`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!res.ok) { errEl.textContent = "Invalid username or password."; return; }
+    const data = await res.json();
+    localStorage.setItem("orbit_staff_token", data.token);
+    localStorage.setItem("orbit_staff_role", data.role);
+    localStorage.setItem("orbit_staff_branch", data.branch_id);
+    routeStaff(data.role, data.branch_id, data.token);
+  } catch (e) {
+    errEl.textContent = "Could not reach server.";
+  }
+}
+
+function routeStaff(role, branchId, token) {
+  if (role === "KITCHEN") { showView("kitchenView"); initKitchen(branchId); }
+  else if (role === "CASHIER" || role === "MANAGER") { showView("cashierView"); initCashier(branchId); }
+  else logout();
+}
+
+// ============ CUSTOMER ============
+let TOKEN, BRANCH_ID, TABLE_NUMBER, MENU = [], cart = {};
+let currentOrderId = null;
+
+async function initConsumer(token) {
+  TOKEN = token;
+  currentOrderId = localStorage.getItem("orbit_order_id_" + token);
+  showView("consumerView");
+  try {
+    const res = await fetch(`${API}/api/v1/tables/resolve?token=${encodeURIComponent(TOKEN)}`);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    BRANCH_ID = data.branch_id;
+    TABLE_NUMBER = data.table_number;
+    document.getElementById("tableBadge").textContent = `Table ${TABLE_NUMBER}`;
+  } catch (e) {
+    document.body.innerHTML = "<p style='text-align:center;padding:40px;color:#ff6b6b;'>This QR code isn't valid. Please ask staff for help.</p>";
+    return;
+  }
+  if (currentOrderId) showTracking(currentOrderId); else loadMenu();
+}
+
+async function loadMenu() {
+  const res = await fetch(`${API}/api/v1/menu?branch_id=${BRANCH_ID}`);
+  MENU = await res.json();
+  renderMenu();
+}
+
+function renderMenu() {
+  document.getElementById("menuList").innerHTML = MENU.map(cat => `
+    <div class="category">${cat.name}</div>
+    ${cat.items.map(item => `
+      <div class="item">
+        <div><div class="name">${item.name}</div><div class="price">${money(item.price)}</div></div>
+        <div class="qty">
+          <button onclick="changeQty('${item.id}', -1)">−</button>
+          <span id="qty-${item.id}">${cart[item.id]?.qty || 0}</span>
+          <button class="add" onclick="changeQty('${item.id}', 1)">+</button>
+        </div>
+      </div>
+    `).join("")}
+  `).join("");
+}
+
+function findItem(id) { for (const cat of MENU) { const it = cat.items.find(i => i.id === id); if (it) return it; } }
+
+function changeQty(itemId, delta) {
+  const item = findItem(itemId);
+  const existing = cart[itemId] || { name: item.name, price: item.price, qty: 0 };
+  existing.qty = Math.max(0, existing.qty + delta);
+  if (existing.qty === 0) delete cart[itemId]; else cart[itemId] = existing;
+  document.getElementById(`qty-${itemId}`).textContent = existing.qty || 0;
+  updateCartBar();
+}
+
+function updateCartBar() {
+  const entries = Object.values(cart);
+  const count = entries.reduce((s, i) => s + i.qty, 0);
+  const total = entries.reduce((s, i) => s + i.qty * i.price, 0);
+  document.getElementById("cartBar").style.display = count > 0 ? "flex" : "none";
+  document.getElementById("cartCount").textContent = `${count} item${count === 1 ? "" : "s"}`;
+  document.getElementById("cartTotal").textContent = money(total);
+}
+
+async function openCart() {
+  const entries = Object.entries(cart);
+  document.getElementById("cartLines").innerHTML = entries.map(([id, i]) => `<div class="cart-line"><span>${i.qty}× ${i.name}</span><span>${money(i.qty * i.price)}</span></div>`).join("");
+  document.getElementById("cartSheetTotal").textContent = money(entries.reduce((s, [, i]) => s + i.qty * i.price, 0));
+  document.getElementById("cartSheet").classList.add("open");
+  document.getElementById("eta").textContent = "Calculating wait time…";
+  const items = entries.map(([id, i]) => ({ menu_item_id: id, quantity: i.qty }));
+  const res = await fetch(`${API}/api/v1/orders/estimate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table_token: TOKEN, items, notes: "" }) });
+  const est = await res.json();
+  document.getElementById("eta").textContent = `Estimated wait: ~${Math.ceil(est.eta_seconds / 60)} min (live kitchen queue)`;
+}
+
+function closeCart() { document.getElementById("cartSheet").classList.remove("open"); }
+
+async function placeOrder() {
+  const items = Object.entries(cart).map(([id, i]) => ({ menu_item_id: id, quantity: i.qty }));
+  if (window._addingTo) {
+    const orderId = window._addingTo;
+    window._addingTo = null;
+    await fetch(`${API}/api/v1/orders/${orderId}/items`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items }) });
+    cart = {}; closeCart(); showTracking(orderId); return;
+  }
+  const res = await fetch(`${API}/api/v1/orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table_token: TOKEN, items, notes: "" }) });
+  const order = await res.json();
+  for (const s of ["PAYMENT_PENDING", "PAID", "RESTAURANT_ACCEPTED", "QUEUED"]) await patchStatus(order.id, s);
+  currentOrderId = order.id;
+  localStorage.setItem("orbit_order_id_" + TOKEN, order.id);
+  closeCart();
+  showTracking(order.id);
+}
+
+async function patchStatus(orderId, status) {
+  await fetch(`${API}/api/v1/orders/${orderId}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+}
+
+async function showTracking(orderId) {
+  document.getElementById("menuView").classList.add("hidden");
+  document.getElementById("cartBar").style.display = "none";
+  document.getElementById("trackView").classList.remove("hidden");
+  await fetchOrder(orderId);
+  connectOrderWS(orderId);
+}
+
+async function fetchOrder(orderId) {
+  const res = await fetch(`${API}/api/v1/orders/${orderId}`);
+  if (!res.ok) { localStorage.removeItem("orbit_order_id_" + TOKEN); location.reload(); return; }
+  renderTracking(await res.json());
+}
+
+function renderTracking(order) {
+  const idx = FLOW.indexOf(order.status);
+  const terminal = ["CANCELLED","REJECTED","FAILED","REFUNDED"].includes(order.status);
+  const timeline = terminal
+    ? `<li class="current"><span class="dot"></span>${order.status}</li>`
+    : FLOW.map((s, i) => `<li class="${i < idx ? "done" : i === idx ? "current" : ""}"><span class="dot"></span>${s.replaceAll("_"," ")}</li>`).join("");
+  document.getElementById("trackView").innerHTML = `
+    <div class="order-header"><div class="code">${order.code}</div><div class="total">${money(order.total_amount)} · Table ${TABLE_NUMBER}</div></div>
+    <ul class="timeline">${timeline}</ul>
+    <div style="margin-top:16px; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px;">
+      ${order.items.map(i => `<div class="cart-line"><span>${i.quantity}× ${i.name}</span><span>${money(i.unit_price * i.quantity)}</span></div>`).join("")}
+    </div>
+    ${!terminal && order.status !== "COMPLETED" ? `<button class="btn" style="width:100%; margin-top:16px;" onclick="addMoreItems('${order.id}')">+ Add more items</button>` : ""}
+    ${order.status === "COMPLETED" ? `<button class="btn secondary" style="width:100%; margin-top:16px;" onclick="newOrder()">Start a new order</button>` : ""}
+  `;
+}
+
+function newOrder() { localStorage.removeItem("orbit_order_id_" + TOKEN); location.reload(); }
+
+function addMoreItems(orderId) {
+  cart = {};
+  document.getElementById("trackView").classList.add("hidden");
+  document.getElementById("menuView").classList.remove("hidden");
+  renderMenu();
+  window._addingTo = orderId;
+}
+
+function connectOrderWS(orderId) {
+  const ws = new WebSocket(`${WS}/ws/order/${orderId}`);
+  ws.onmessage = () => fetchOrder(orderId);
+  ws.onclose = () => setTimeout(() => connectOrderWS(orderId), 2000);
+}
+
+// ============ KITCHEN ============
+let kBranch, audioCtx = null, soundOn = false;
+
+function enableSound() {
+  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+  soundOn = true;
+  document.getElementById("soundBtn").textContent = "🔊 Sound on";
+  beep();
+}
+function beep(freq = 880, duration = 180) {
+  if (!soundOn || !audioCtx) return;
+  const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+  osc.type = "sine"; osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration / 1000);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + duration / 1000);
+}
+function alertNewOrder() { beep(880, 160); setTimeout(() => beep(1046, 220), 200); }
+
+function initKitchen(branchId) {
+  kBranch = branchId;
+  fetchTasks();
+  connectKitchenWS();
+}
+
+async function fetchTasks() {
+  const res = await fetch(`${API}/api/v1/kitchen/tasks?branch_id=${kBranch}`);
+  render(await res.json());
+}
+
+function nextStatus(status) { return { QUEUED: "ACCEPTED", ACCEPTED: "PREPARING", PREPARING: "READY", READY: null }[status]; }
+
+function render(tasks) {
+  const grouped = {};
+  for (const t of tasks) (grouped[t.station_id] ||= []).push(t);
+  const board = document.getElementById("board");
+  const ids = Object.keys(grouped);
+  if (ids.length === 0) { board.innerHTML = '<div class="empty">No active kitchen tasks. Waiting for orders…</div>'; return; }
+  board.innerHTML = ids.map(sid => `
+    <div class="station">
+      <h2>Station ${sid.slice(0,8)}</h2>
+      ${grouped[sid].map(renderTask).join("")}
+    </div>
+  `).join("");
+}
+
+function renderTask(t) {
+  const next = nextStatus(t.status);
+  return `<div class="task ${t.status}">
+    <div class="top"><span class="item-name">${t.item_name}</span><span class="order-code">${t.order_code}</span></div>
+    <div class="meta">table ${t.table_id.slice(0,8)} · elapsed ${t.elapsed_seconds}s</div>
+    <button ${next ? "" : "disabled"} onclick="advanceTask('${t.id}', '${next}')">${next ? `Mark ${next}` : "Done"}</button>
+  </div>`;
+}
+
+async function advanceTask(taskId, status) {
+  await fetch(`${API}/api/v1/kitchen/tasks/${taskId}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+  fetchTasks();
+}
+
+function connectKitchenWS() {
+  const ws = new WebSocket(`${WS}/ws/kitchen/${kBranch}`);
+  ws.onopen = () => document.getElementById("kdsStatus").textContent = "live";
+  ws.onclose = () => { document.getElementById("kdsStatus").textContent = "reconnecting…"; setTimeout(connectKitchenWS, 2000); };
+  ws.onmessage = (evt) => {
+    const data = JSON.parse(evt.data);
+    logFeed(data);
+    if (data.event_type === "OrderCreated" || data.event_type === "KitchenTaskAssigned") alertNewOrder();
+    fetchTasks();
+  };
+}
+
+function logFeed(data) {
+  const f = document.getElementById("feed");
+  if (!f) return;
+  const line = document.createElement("div");
+  line.textContent = `${new Date().toLocaleTimeString()}  ${data.event_type} :: ${JSON.stringify(data.payload)}`;
+  f.prepend(line);
+}
+
+// ============ CASHIER ============
+let cBranch, cOrders = {};
+
+function initCashier(branchId) {
+  cBranch = branchId;
+  loadActiveOrders();
+  connectCashierWS();
+}
+
+async function loadActiveOrders() {
+  const res = await fetch(`${API}/api/v1/orders?branch_id=${cBranch}`);
+  if (!res.ok) return;
+  for (const o of await res.json()) cOrders[o.id] = o;
+  renderCashier();
+}
+
+async function refreshOrder(orderId) {
+  const res = await fetch(`${API}/api/v1/orders/${orderId}`);
+  if (!res.ok) return;
+  cOrders[orderId] = await res.json();
+  renderCashier();
+}
+
+function renderCashier() {
+  const list = Object.values(cOrders).sort((a, b) => a.code < b.code ? 1 : -1);
+  const active = list.filter(o => !["COMPLETED","CANCELLED","REJECTED","FAILED","REFUNDED"].includes(o.status));
+  const ready = list.filter(o => o.status === "READY");
+  const revenue = list.filter(o => !["CANCELLED","REJECTED"].includes(o.status)).reduce((s, o) => s + o.total_amount, 0);
+
+  document.getElementById("activeCount").textContent = active.length;
+  document.getElementById("readyCount").textContent = ready.length;
+  document.getElementById("revenue").textContent = money(revenue);
+  document.getElementById("ordersBody").innerHTML = list.map(o => `
+    <tr>
+      <td>${o.code}</td><td>${o.table_id.slice(0,8)}</td>
+      <td>${o.items.map(i => `${i.quantity}× ${i.name}`).join(", ")}</td>
+      <td>${money(o.total_amount)}</td>
+      <td><span class="badge ${o.status}">${o.status.replaceAll("_"," ")}</span></td>
+    </tr>
+  `).join("") || `<tr><td colspan="5" style="text-align:center; color:var(--muted);">No orders yet.</td></tr>`;
+}
+
+function connectCashierWS() {
+  const ws = new WebSocket(`${WS}/ws/manager/${cBranch}`);
+  ws.onopen = () => document.getElementById("cashierStatus").textContent = "live";
+  ws.onclose = () => { document.getElementById("cashierStatus").textContent = "reconnecting…"; setTimeout(connectCashierWS, 2000); };
+  ws.onmessage = (evt) => {
+    const data = JSON.parse(evt.data);
+    if (data.entity_type === "order") refreshOrder(data.entity_id);
+    else if (data.entity_type === "kitchen_task" && data.payload.order_id) refreshOrder(data.payload.order_id);
+  };
+}
+
+// ============ PWA install ============
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+
+boot();
+</script>
+</body>
+</html>
