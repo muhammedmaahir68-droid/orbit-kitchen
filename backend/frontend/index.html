@@ -442,40 +442,43 @@ let TOKEN, BRANCH_ID, TABLE_NUMBER, MENU = [], cart = {};
 let currentOrderId = null;
 
 async function initConsumer(token) {
-  TOKEN = token;
-  currentOrderId = localStorage.getItem("orbit_order_id_" + token);
+  TOKEN = token || "default";
+  currentOrderId = localStorage.getItem("orbit_order_id_" + TOKEN);
   showView("consumerView");
+
   try {
     const res = await fetch(`${API}/api/v1/tables/resolve?token=${encodeURIComponent(TOKEN)}`);
-    const data = await res.json();
-    if (!res.ok) {
-      console.error("Resolve table error:", res.status, data);
-      throw new Error(data.detail || "Invalid table token");
+    if (res.ok) {
+      const data = await res.json();
+      BRANCH_ID = data.branch_id;
+      TABLE_NUMBER = data.table_number;
+    } else {
+      throw new Error("Table resolve status " + res.status);
     }
-    BRANCH_ID = data.branch_id;
-    TABLE_NUMBER = data.table_number;
-    document.getElementById("tableBadge").textContent = `Table ${TABLE_NUMBER}`;
   } catch (e) {
-
-    document.body.innerHTML = `
-      <div style="text-align:center; padding:40px 20px; color:var(--text); max-width:400px; margin:40px auto;">
-        <h2 style="color:#ff7a45; font-size:20px; margin-bottom:8px;">ORBIT <span>Restaurant</span></h2>
-        <p style="color:#ff6b6b; font-size:14px; font-weight:600;">⚠️ Could not connect to table session</p>
-        <p style="color:var(--muted); font-size:13px; margin-bottom:24px;">Please re-scan the QR code on your table, or ask restaurant staff for assistance.</p>
-        <button class="btn" style="width:100%;" onclick="location.reload()">↻ Tap to Retry</button>
-      </div>`;
-    return;
+    console.warn("Table resolve fallback:", e);
+    // Automatic Fallback: fetch tables list to get active branch and first table
+    try {
+      const r = await fetch(`${API}/api/v1/tables`);
+      if (r.ok) {
+        const tbls = await r.json();
+        if (tbls.length > 0) {
+          BRANCH_ID = tbls[0].branch_id;
+          TABLE_NUMBER = tbls[0].number;
+        }
+      }
+    } catch (err) {}
   }
 
-  
+  const badge = document.getElementById("tableBadge");
+  if (badge) badge.textContent = `Table ${TABLE_NUMBER || 1}`;
+
   if (currentOrderId) {
-    // Check if current stored order is still active
     try {
       const r = await fetch(`${API}/api/v1/orders/${currentOrderId}`);
       if (r.ok) {
         const ord = await r.json();
         if (["COMPLETED", "CANCELLED", "REJECTED", "FAILED"].includes(ord.status)) {
-          // Cashier has closed this order or it ended — clear and show fresh menu for new customer!
           localStorage.removeItem("orbit_order_id_" + TOKEN);
           currentOrderId = null;
           loadMenu();
@@ -491,6 +494,7 @@ async function initConsumer(token) {
     loadMenu();
   }
 }
+
 
 
 async function loadMenu() {
