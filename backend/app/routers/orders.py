@@ -104,3 +104,65 @@ async def add_items(order_id: str, payload: AddItemsIn, db: AsyncSession = Depen
     except ValueError as e:
         raise HTTPException(404, str(e))
     return _serialize(order)
+
+
+@router.get("/revenue/summary")
+async def revenue_summary(branch_id: str, db: AsyncSession = Depends(get_db)):
+    """Real-time revenue breakdown for the cashier dashboard. Excludes CANCELLED/REJECTED orders."""
+    from sqlalchemy import select, func
+    from ..models import Order
+    from datetime import datetime, timedelta, timezone
+
+    exclude = [OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.REFUNDED, OrderStatus.FAILED]
+
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = today_start - timedelta(days=today_start.weekday())
+    month_start = today_start.replace(day=1)
+    year_start = today_start.replace(month=1, day=1)
+
+    async def _total(since=None):
+        q = select(func.coalesce(func.sum(Order.total_amount), 0.0)).where(
+            Order.branch_id == branch_id,
+            Order.status.not_in(exclude),
+        )
+        if since:
+            q = q.where(Order.created_at >= since)
+        result = await db.execute(q)
+        return float(result.scalar())
+
+    async def _count(since=None):
+        q = select(func.count(Order.id)).where(
+            Order.branch_id == branch_id,
+            Order.status.not_in(exclude),
+        )
+        if since:
+            q = q.where(Order.created_at >= since)
+        result = await db.execute(q)
+        return int(result.scalar())
+
+    # Last 7 days for the bar chart
+    daily = []
+    for i in range(6, -1, -1):
+        day_s = today_start - timedelta(days=i)
+        day_e = day_s + timedelta(days=1)
+        q = select(func.coalesce(func.sum(Order.total_amount), 0.0)).where(
+            Order.branch_id == branch_id,
+            Order.status.not_in(exclude),
+            Order.created_at >= day_s,
+            Order.created_at < day_e,
+        )
+        result = await db.execute(q)
+        daily.append({"date": day_s.strftime("%a %d"), "revenue": float(result.scalar())})
+
+    return {
+        "today": await _total(today_start),
+        "week": await _total(week_start),
+        "month": await _total(month_start),
+        "year": await _total(year_start),
+        "total": await _total(),
+        "today_orders": await _count(today_start),
+        "total_orders": await _count(),
+        "daily_chart": daily,
+        "server_time": now.isoformat(),
+    }

@@ -7,6 +7,7 @@
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#0b0e14" />
 <link rel="icon" href="icon.svg" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   :root {
     --bg:#0b0e14; --panel:#12161f; --panel2:#171c27; --border:#232938;
@@ -170,6 +171,10 @@
   <header class="appbar">
     <h1>ORBIT <span>Kitchen</span></h1>
     <div class="right">
+      <div style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:3px 10px; text-align:center;">
+        <div id="kClockDate" style="font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;"></div>
+        <div id="kClockTime" style="font-size:15px; font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums;"></div>
+      </div>
       <span id="kdsStatus">connecting…</span>
       <button class="logout" onclick="toggleKitchenMenuPanel()" id="kitchenMenuBtn">🍽️ Items</button>
       <button class="logout" onclick="enableSound()" id="soundBtn">🔇 Sound</button>
@@ -190,17 +195,69 @@
 
 <!-- ============ CASHIER VIEW ============ -->
 <div id="cashierView" class="hidden">
-  <header class="appbar">
+  <header class="appbar" style="flex-wrap:wrap; gap:6px;">
     <h1>ORBIT <span>Cashier & Management</span></h1>
-    <div class="right">
-      <span id="cashierStatus">connecting…</span>
+    <div class="right" style="flex-wrap:wrap; gap:8px; flex:1; justify-content:flex-end;">
+      <div style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:4px 10px; text-align:center; min-width:160px;">
+        <div id="clockDate" style="font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;"></div>
+        <div id="clockTime" style="font-size:16px; font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums; letter-spacing:1px;"></div>
+      </div>
+      <span id="cashierStatus" style="font-size:11px;">connecting…</span>
       <button class="logout" onclick="logout()">Log out</button>
     </div>
   </header>
+
+  <!-- ── QUICK STATS ROW ─────────────────────────────────────────────── -->
   <div id="summary">
     <div class="stat"><div class="label">Active Orders</div><div class="value" id="activeCount">0</div></div>
-    <div class="stat"><div class="label">Revenue (open + served)</div><div class="value" id="revenue">₹0</div></div>
+    <div class="stat"><div class="label">Today Orders</div><div class="value" id="todayOrdersCount">0</div></div>
     <div class="stat"><div class="label">Ready for Pickup</div><div class="value" id="readyCount">0</div></div>
+  </div>
+
+  <!-- ── REVENUE ANALYTICS DASHBOARD ─────────────────────────────────── -->
+  <div style="padding:0 20px 20px;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h2 style="font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0;">📊 Revenue Analytics</h2>
+        <span id="revenueLastUpdated" style="font-size:10px; color:var(--muted);"></span>
+      </div>
+
+      <!-- Revenue Tiles -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px,1fr)); gap:10px; margin-bottom:18px;">
+        <div style="background:var(--panel2); border-radius:10px; padding:12px; border-left:3px solid var(--accent);">
+          <div style="font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Today</div>
+          <div id="revToday" style="font-size:20px; font-weight:700; color:var(--accent);">₹0</div>
+        </div>
+        <div style="background:var(--panel2); border-radius:10px; padding:12px; border-left:3px solid #4ecdc4;">
+          <div style="font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">This Week</div>
+          <div id="revWeek" style="font-size:20px; font-weight:700; color:#4ecdc4;">₹0</div>
+        </div>
+        <div style="background:var(--panel2); border-radius:10px; padding:12px; border-left:3px solid #45b7d1;">
+          <div style="font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">This Month</div>
+          <div id="revMonth" style="font-size:20px; font-weight:700; color:#45b7d1;">₹0</div>
+        </div>
+        <div style="background:var(--panel2); border-radius:10px; padding:12px; border-left:3px solid #96ceb4;">
+          <div style="font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">This Year</div>
+          <div id="revYear" style="font-size:20px; font-weight:700; color:#96ceb4;">₹0</div>
+        </div>
+        <div style="background:var(--panel2); border-radius:10px; padding:12px; border-left:3px solid #ffd93d;">
+          <div style="font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">All Time Total</div>
+          <div id="revTotal" style="font-size:20px; font-weight:700; color:#ffd93d;">₹0</div>
+        </div>
+      </div>
+
+      <!-- Charts side by side -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+        <div>
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">Last 7 Days</div>
+          <canvas id="barChart" height="180"></canvas>
+        </div>
+        <div>
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">Revenue Split</div>
+          <canvas id="pieChart" height="180"></canvas>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- TABLE QR GENERATOR SECTION -->
@@ -235,9 +292,12 @@
   <!-- ═══════════════════ MENU BUILDER PANEL ═══════════════════ -->
   <div style="padding:0 20px 20px;">
     <div style="background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:6px;">
         <h2 style="font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0;">🍽️ Menu Builder — Add / Remove Items</h2>
-        <button class="btn secondary" style="font-size:11px; padding:6px 12px;" onclick="loadCashierMenu()">↻ Refresh</button>
+        <div style="display:flex; gap:6px;">
+          <button class="btn secondary" style="font-size:11px; padding:6px 12px;" onclick="loadCashierMenu()">↻ Refresh</button>
+          <button style="font-size:11px; padding:6px 12px; border-radius:6px; border:1px solid #ff4444; background:transparent; color:#ff4444; cursor:pointer; font-weight:600;" onclick="resetAllMenu()">🗑 Reset All Menu</button>
+        </div>
       </div>
 
       <!-- Add Category -->
@@ -607,6 +667,7 @@ function alertNewOrder() { beep(880, 160); setTimeout(() => beep(1046, 220), 200
 
 function initKitchen(branchId) {
   kBranch = branchId;
+  startClock();
   fetchTasks();
   connectKitchenWS();
 }
@@ -667,14 +728,107 @@ function logFeed(data) {
 }
 
 // ============ CASHIER ============
-let cBranch, cOrders = {};
+let cBranch, cOrders = {}, _barChart = null, _pieChart = null;
+
+// ── Live Clock ─────────────────────────────────────────────────────────────
+function startClock() {
+  function tick() {
+    const now = new Date();
+    const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const dateStr = `${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+    const timeStr = now.toLocaleTimeString("en-US", { hour12: false });
+    // Cashier
+    const cd = document.getElementById("clockDate"); if (cd) cd.textContent = dateStr;
+    const ct = document.getElementById("clockTime"); if (ct) ct.textContent = timeStr;
+    // Kitchen
+    const kd = document.getElementById("kClockDate"); if (kd) kd.textContent = dateStr;
+    const kt = document.getElementById("kClockTime"); if (kt) kt.textContent = timeStr;
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+// ── Revenue Analytics ───────────────────────────────────────────────────────
+async function loadRevenue() {
+  try {
+    const res = await fetch(`${API}/api/v1/orders/revenue/summary?branch_id=${cBranch}`);
+    if (!res.ok) return;
+    const d = await res.json();
+
+    document.getElementById("revToday").textContent = money(d.today);
+    document.getElementById("revWeek").textContent = money(d.week);
+    document.getElementById("revMonth").textContent = money(d.month);
+    document.getElementById("revYear").textContent = money(d.year);
+    document.getElementById("revTotal").textContent = money(d.total);
+    if (document.getElementById("todayOrdersCount")) document.getElementById("todayOrdersCount").textContent = d.today_orders;
+    document.getElementById("revenueLastUpdated").textContent = `Updated ${new Date().toLocaleTimeString()}`;
+
+    // Bar Chart — Last 7 Days
+    const barCtx = document.getElementById("barChart").getContext("2d");
+    const labels = d.daily_chart.map(x => x.date);
+    const values = d.daily_chart.map(x => x.revenue);
+    if (_barChart) _barChart.destroy();
+    _barChart = new Chart(barCtx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{ label: "Revenue (₹)", data: values,
+          backgroundColor: "rgba(255,122,69,0.7)", borderColor: "#ff7a45", borderWidth: 1,
+          borderRadius: 6 }],
+      },
+      options: {
+        responsive: true, plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: "#8b93a7", font: { size: 10 } }, grid: { color: "#232938" } },
+          y: { ticks: { color: "#8b93a7", font: { size: 10 }, callback: v => "₹" + v }, grid: { color: "#232938" } },
+        },
+      },
+    });
+
+    // Pie Chart — Today / This Week / This Month / This Year
+    const pieCtx = document.getElementById("pieChart").getContext("2d");
+    if (_pieChart) _pieChart.destroy();
+    _pieChart = new Chart(pieCtx, {
+      type: "doughnut",
+      data: {
+        labels: ["Today", "Week (non-today)", "Month (non-week)", "Year (non-month)"],
+        datasets: [{
+          data: [
+            Math.max(0, d.today),
+            Math.max(0, d.week - d.today),
+            Math.max(0, d.month - d.week),
+            Math.max(0, d.year - d.month),
+          ],
+          backgroundColor: ["#ff7a45", "#4ecdc4", "#45b7d1", "#96ceb4"],
+          borderColor: "#12161f", borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true, cutout: "65%",
+        plugins: {
+          legend: { display: true, position: "bottom", labels: { color: "#8b93a7", font: { size: 10 }, boxWidth: 10 } },
+        },
+      },
+    });
+  } catch (e) { console.error("loadRevenue error", e); }
+}
+
+async function resetAllMenu() {
+  if (!confirm("⚠️ This will DELETE all menu categories and items. Are you sure?")) return;
+  const r = await fetch(`${API}/api/v1/menu/reset?branch_id=${cBranch}`, { method: "DELETE" });
+  if (r.ok) { loadCashierMenu(); }
+}
 
 function initCashier(branchId) {
   cBranch = branchId;
+  startClock();
   loadActiveOrders();
   loadCashierTables();
   loadUpiId();
   loadCashierMenu();
+  loadRevenue();
+  setInterval(loadRevenue, 30000); // auto-refresh charts every 30 sec
   connectCashierWS();
 }
 

@@ -64,6 +64,20 @@ async def delete_category(cat_id: str):
         return {"deleted": cat_id}
 
 
+@router.delete("/reset")
+async def reset_menu(branch_id: str):
+    """Wipe ALL categories and items for a branch so the cashier can start fresh."""
+    async with SessionLocal() as db:
+        items = await db.execute(select(MenuItem).where(MenuItem.branch_id == branch_id))
+        for item in items.scalars().all():
+            await db.delete(item)
+        cats = await db.execute(select(MenuCategory).where(MenuCategory.branch_id == branch_id))
+        for cat in cats.scalars().all():
+            await db.delete(cat)
+        await db.commit()
+        return {"reset": True, "branch_id": branch_id}
+
+
 # ── MENU ITEMS ─────────────────────────────────────────────────────────────────
 
 class ItemCreate(BaseModel):
