@@ -505,7 +505,24 @@ async function loadMenu() {
 }
 
 function renderMenu() {
-  document.getElementById("menuList").innerHTML = MENU.map(cat => `
+  const container = document.getElementById("menuList");
+  if (!container) return;
+
+  const totalItems = (MENU || []).reduce((sum, cat) => sum + (cat.items || []).length, 0);
+  if (totalItems === 0) {
+    container.innerHTML = `
+      <div style="text-align:center; padding:60px 20px; color:var(--text); max-width:400px; margin:0 auto;">
+        <div style="font-size:48px; margin-bottom:12px;">🍽️</div>
+        <h3 style="font-size:18px; margin:0 0 6px; color:var(--accent);">Menu Being Prepared</h3>
+        <p style="font-size:13px; color:var(--muted); margin:0 0 20px; line-height:1.5;">
+          The cashier is setting up today's fresh menu items. Please check back in a moment or ask staff for assistance.
+        </p>
+        <button class="btn secondary" style="font-size:13px; padding:10px 20px;" onclick="loadMenu()">↻ Refresh Menu</button>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = MENU.map(cat => `
     <div class="category">${cat.name}</div>
     ${cat.items.map(item => item.is_available ? `
       <div class="item">
@@ -527,6 +544,7 @@ function renderMenu() {
     `).join("")}
   `).join("");
 }
+
 
 function findItem(id) { for (const cat of MENU) { const it = cat.items.find(i => i.id === id); if (it) return it; } }
 

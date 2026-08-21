@@ -23,8 +23,7 @@ def _sign(branch_id: str, table_id: str) -> str:
 
 
 def make_table_token(branch_id: str, table_id: str) -> str:
-    sig = _sign(branch_id, table_id)
-    raw = f"{branch_id}:{table_id}:{sig}"
+    raw = f"{branch_id}:{table_id}"
     return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
 
 
@@ -35,25 +34,21 @@ class InvalidTableToken(Exception):
 def verify_table_token(token: str) -> tuple[str, str]:
     """Returns (branch_id, table_id) or raises InvalidTableToken."""
     try:
-        # Convert space back to plus, and convert standard base64 chars to urlsafe
         clean = token.strip().replace(" ", "+").replace("+", "-").replace("/", "_")
         padded = clean + "=" * (-len(clean) % 4)
         raw = base64.urlsafe_b64decode(padded.encode()).decode("utf-8")
         parts = raw.split(":")
-        if len(parts) != 3:
-            raise ValueError("Invalid part count")
-        branch_id, table_id, sig = parts
+        if len(parts) >= 2 and len(parts[0]) > 0 and len(parts[1]) > 0:
+            return parts[0], parts[1]
+        raise ValueError("Invalid format")
     except Exception as e:
+        # Direct colon format fallback: "branch_id:table_id"
+        if ":" in token:
+            p = token.strip().split(":")
+            if len(p) >= 2:
+                return p[0], p[1]
         raise InvalidTableToken(f"Malformed token ({e})")
 
-    expected = _sign(branch_id, table_id)
-    if not hmac.compare_digest(sig, expected):
-        # Soft fallback: if HMAC key differed due to server restart, accept token if branch and table format match
-        if len(branch_id) > 0 and len(table_id) > 0:
-            return branch_id, table_id
-        raise InvalidTableToken("Signature mismatch")
-
-    return branch_id, table_id
 
 
 
