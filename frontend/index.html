@@ -456,8 +456,31 @@ async function initConsumer(token) {
     document.body.innerHTML = "<p style='text-align:center;padding:40px;color:#ff6b6b;'>This QR code isn't valid. Please ask staff for help.</p>";
     return;
   }
-  if (currentOrderId) showTracking(currentOrderId); else loadMenu();
+  
+  if (currentOrderId) {
+    // Check if current stored order is still active
+    try {
+      const r = await fetch(`${API}/api/v1/orders/${currentOrderId}`);
+      if (r.ok) {
+        const ord = await r.json();
+        if (["COMPLETED", "CANCELLED", "REJECTED", "FAILED"].includes(ord.status)) {
+          // Cashier has closed this order or it ended — clear and show fresh menu for new customer!
+          localStorage.removeItem("orbit_order_id_" + TOKEN);
+          currentOrderId = null;
+          loadMenu();
+          return;
+        }
+      } else {
+        localStorage.removeItem("orbit_order_id_" + TOKEN);
+        currentOrderId = null;
+      }
+    } catch (e) {}
+    showTracking(currentOrderId);
+  } else {
+    loadMenu();
+  }
 }
+
 
 async function loadMenu() {
   const res = await fetch(`${API}/api/v1/menu?branch_id=${BRANCH_ID}`);
@@ -591,28 +614,46 @@ async function showTracking(orderId) {
 
 async function fetchOrder(orderId) {
   const res = await fetch(`${API}/api/v1/orders/${orderId}`);
-  if (!res.ok) { localStorage.removeItem("orbit_order_id_" + TOKEN); location.reload(); return; }
-  renderTracking(await res.json());
+  if (!res.ok) { localStorage.removeItem("orbit_order_id_" + TOKEN); newOrder(); return; }
+  const order = await res.json();
+  if (["COMPLETED", "CANCELLED", "REJECTED", "FAILED"].includes(order.status)) {
+    localStorage.removeItem("orbit_order_id_" + TOKEN);
+  }
+  renderTracking(order);
 }
 
 function renderTracking(order) {
   const idx = FLOW.indexOf(order.status);
   const terminal = ["CANCELLED","REJECTED","FAILED","REFUNDED"].includes(order.status);
+  const isCompleted = order.status === "COMPLETED";
+
   const timeline = terminal
     ? `<li class="current"><span class="dot"></span>${order.status}</li>`
     : FLOW.map((s, i) => `<li class="${i < idx ? "done" : i === idx ? "current" : ""}"><span class="dot"></span>${s.replaceAll("_"," ")}</li>`).join("");
+
   document.getElementById("trackView").innerHTML = `
-    <div class="order-header"><div class="code">${order.code}</div><div class="total">${money(order.total_amount)} · Table ${TABLE_NUMBER}</div></div>
+    <div class="order-header">
+      <div class="code">${order.code}</div>
+      <div class="total">${money(order.total_amount)} · Table ${TABLE_NUMBER}</div>
+    </div>
+    ${isCompleted ? `<div style="text-align:center; padding:12px; background:rgba(46,204,113,0.15); border:1px solid #2ecc71; border-radius:10px; color:#2ecc71; font-size:13px; font-weight:600; margin-bottom:14px;">✅ Order Completed & Closed by Cashier! Table is ready for new orders.</div>` : ""}
     <ul class="timeline">${timeline}</ul>
     <div style="margin-top:16px; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px;">
       ${order.items.map(i => `<div class="cart-line"><span>${i.quantity}× ${i.name}</span><span>${money(i.unit_price * i.quantity)}</span></div>`).join("")}
     </div>
-    ${!terminal && order.status !== "COMPLETED" ? `<button class="btn" style="width:100%; margin-top:16px;" onclick="addMoreItems('${order.id}')">+ Add more items</button>` : ""}
-    ${order.status === "COMPLETED" ? `<button class="btn secondary" style="width:100%; margin-top:16px;" onclick="newOrder()">Start a new order</button>` : ""}
+    ${!terminal && !isCompleted ? `<button class="btn" style="width:100%; margin-top:16px;" onclick="addMoreItems('${order.id}')">+ Add more items</button>` : ""}
+    ${isCompleted || terminal ? `<button class="btn" style="width:100%; margin-top:16px;" onclick="newOrder()">📱 Start New Order</button>` : ""}
   `;
 }
 
-function newOrder() { localStorage.removeItem("orbit_order_id_" + TOKEN); location.reload(); }
+function newOrder() {
+  localStorage.removeItem("orbit_order_id_" + TOKEN);
+  currentOrderId = null;
+  document.getElementById("trackView").classList.add("hidden");
+  document.getElementById("menuView").classList.remove("hidden");
+  loadMenu();
+}
+
 
 function addMoreItems(orderId) {
   cart = {};
@@ -1048,24 +1089,51 @@ function renderCashier() {
 
   document.getElementById("activeCount").textContent = active.length;
   document.getElementById("readyCount").textContent = ready.length;
-  document.getElementById("revenue").textContent = money(revenue);
-  document.getElementById("ordersBody").innerHTML = list.map(o => `
+  // revenue element may not exist in new dashboard, skip gracefully
+  const revEl = document.getElementById("revenue"); if (revEl) revEl.textContent = money(revenue);
+
+  const TERMINAL = ["COMPLETED","CANCELLED","REJECTED","FAILED","REFUNDED"];
+  document.getElementById("ordersBody").innerHTML = list.map(o => {
+    const isDone = TERMINAL.includes(o.status);
+    const isCounter = o.notes === "Pay at Cashier Counter";
+    const needsCashPayment = isCounter && !["PAID","COMPLETED"].includes(o.status);
+
+    let actions = "";
+    if (!isDone) {
+      if (needsCashPayment) {
+        actions += `<button style="margin-left:5px; font-size:11px; padding:4px 9px; border-radius:4px; border:none; background:var(--accent); color:#111; font-weight:700; cursor:pointer;" onclick="cashierMarkPaid('${o.id}')">💵 Collect Cash</button>`;
+      }
+      actions += `<button style="margin-left:5px; font-size:11px; padding:4px 9px; border-radius:4px; border:none; background:#2ecc71; color:#111; font-weight:700; cursor:pointer;" onclick="closeTable('${o.id}')">✅ Close & Free Table</button>`;
+    }
+    return `
     <tr>
-      <td>${o.code}</td><td>${o.table_id.slice(0,8)}</td>
-      <td>${o.items.map(i => `${i.quantity}× ${i.name}`).join(", ")}</td>
+      <td>${o.code}</td>
+      <td style="font-size:12px;">${o.table_id.slice(0,8)}</td>
+      <td style="font-size:12px;">${o.items.map(i => `${i.quantity}× ${i.name}`).join(", ")}</td>
       <td>${money(o.total_amount)}</td>
       <td>
         <span class="badge ${o.status}">${o.status.replaceAll("_"," ")}</span>
-        ${o.notes === "Pay at Cashier Counter" ? `<button style="margin-left:6px; font-size:11px; padding:4px 8px; border-radius:4px; border:none; background:var(--accent); color:#111; font-weight:600; cursor:pointer;" onclick="markPaidByCashier('${o.id}')">💵 Mark Paid</button>` : ""}
+        ${isCounter && !isDone ? `<span style="margin-left:4px; font-size:10px; color:var(--accent);">COUNTER</span>` : ""}
+        ${actions}
       </td>
-    </tr>
-  `).join("") || `<tr><td colspan="5" style="text-align:center; color:var(--muted);">No orders yet.</td></tr>`;
+    </tr>`;
+  }).join("") || `<tr><td colspan="5" style="text-align:center; color:var(--muted);">No orders yet. Customers scan QR to order.</td></tr>`;
 }
 
-async function markPaidByCashier(orderId) {
+async function cashierMarkPaid(orderId) {
   await patchStatus(orderId, "PAID");
   refreshOrder(orderId);
+  loadRevenue();
 }
+
+async function closeTable(orderId) {
+  await patchStatus(orderId, "COMPLETED");
+  // Remove from active list immediately
+  delete cOrders[orderId];
+  renderCashier();
+  loadRevenue();
+}
+
 
 function connectCashierWS() {
   const ws = new WebSocket(`${WS}/ws/manager/${cBranch}`);

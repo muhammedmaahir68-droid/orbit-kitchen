@@ -9,14 +9,14 @@ from .. import events
 # Explicit allowed transitions. Any transition not listed here is rejected.
 # This is the real backend enforcement of the lifecycle described in the spec.
 ALLOWED_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
-    OrderStatus.CREATED: {OrderStatus.PAYMENT_PENDING, OrderStatus.PAID, OrderStatus.RESTAURANT_ACCEPTED, OrderStatus.CANCELLED},
-    OrderStatus.PAYMENT_PENDING: {OrderStatus.PAID, OrderStatus.RESTAURANT_ACCEPTED, OrderStatus.FAILED, OrderStatus.CANCELLED},
-    OrderStatus.PAID: {OrderStatus.RESTAURANT_ACCEPTED, OrderStatus.REJECTED, OrderStatus.REFUNDED},
-    OrderStatus.RESTAURANT_ACCEPTED: {OrderStatus.QUEUED, OrderStatus.CANCELLED},
-    OrderStatus.QUEUED: {OrderStatus.PREPARING, OrderStatus.CANCELLED},
-    OrderStatus.PREPARING: {OrderStatus.QUALITY_CHECK, OrderStatus.CANCELLED},
-    OrderStatus.QUALITY_CHECK: {OrderStatus.READY, OrderStatus.PREPARING},
-    OrderStatus.READY: {OrderStatus.SERVED, OrderStatus.PREPARING},
+    OrderStatus.CREATED: {OrderStatus.PAYMENT_PENDING, OrderStatus.PAID, OrderStatus.RESTAURANT_ACCEPTED, OrderStatus.CANCELLED, OrderStatus.COMPLETED},
+    OrderStatus.PAYMENT_PENDING: {OrderStatus.PAID, OrderStatus.RESTAURANT_ACCEPTED, OrderStatus.FAILED, OrderStatus.CANCELLED, OrderStatus.COMPLETED},
+    OrderStatus.PAID: {OrderStatus.RESTAURANT_ACCEPTED, OrderStatus.REJECTED, OrderStatus.REFUNDED, OrderStatus.COMPLETED},
+    OrderStatus.RESTAURANT_ACCEPTED: {OrderStatus.QUEUED, OrderStatus.CANCELLED, OrderStatus.COMPLETED},
+    OrderStatus.QUEUED: {OrderStatus.PREPARING, OrderStatus.CANCELLED, OrderStatus.COMPLETED},
+    OrderStatus.PREPARING: {OrderStatus.QUALITY_CHECK, OrderStatus.CANCELLED, OrderStatus.COMPLETED},
+    OrderStatus.QUALITY_CHECK: {OrderStatus.READY, OrderStatus.PREPARING, OrderStatus.COMPLETED},
+    OrderStatus.READY: {OrderStatus.SERVED, OrderStatus.PREPARING, OrderStatus.COMPLETED},
     OrderStatus.SERVED: {OrderStatus.COMPLETED},
     OrderStatus.COMPLETED: set(),
     OrderStatus.CANCELLED: set(),
@@ -131,7 +131,7 @@ async def transition_order_status(db: AsyncSession, order_id: str, new_status: O
     if new_status == OrderStatus.COMPLETED:
         table = await db.get(RestaurantTable, order.table_id)
         if table:
-            table.status = TableStatus.CLEANING
+            table.status = TableStatus.AVAILABLE   # free the table for the next customer
             await db.commit()
             await events.publish("TableReleased", "table", table.id,
                                   {"status": table.status.value}, branch_id=order.branch_id)
