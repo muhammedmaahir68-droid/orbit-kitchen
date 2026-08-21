@@ -44,9 +44,12 @@ async def get_qr_token(table_id: str):
 
 
 @router.get("")
-async def list_tables(branch_id: str):
+async def list_tables(branch_id: str | None = None):
     async with SessionLocal() as db:
-        result = await db.execute(select(RestaurantTable).where(RestaurantTable.branch_id == branch_id))
+        if branch_id:
+            result = await db.execute(select(RestaurantTable).where(RestaurantTable.branch_id == branch_id))
+        else:
+            result = await db.execute(select(RestaurantTable).order_by(RestaurantTable.number))
         tables = result.scalars().all()
     return [
         {"id": t.id, "number": t.number, "status": t.status.value if hasattr(t.status, "value") else t.status,

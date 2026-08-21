@@ -119,6 +119,10 @@
         <div class="field"><label>Password</label><input id="loginPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter') doLogin()" /></div>
         <button class="btn" style="width:100%" onclick="doLogin()">Log in</button>
         <div id="loginErr"></div>
+        <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:16px;">
+          <p style="font-size:11px; color:var(--muted); text-align:center; margin:0 0 10px; text-transform:uppercase; letter-spacing:0.5px;">Customer Demo — Select Table to Order:</p>
+          <div id="demoTableButtons" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center;"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -241,6 +245,20 @@ async function boot() {
   }
 
   showView("loginView");
+  loadDemoTables();
+}
+
+async function loadDemoTables() {
+  try {
+    const res = await fetch(`${API}/api/v1/tables`);
+    if (!res.ok) return;
+    const tables = await res.json();
+    const container = document.getElementById("demoTableButtons");
+    if (!container) return;
+    container.innerHTML = tables.map(t => 
+      `<a href="${location.pathname}?t=${t.token}" style="padding:8px 14px; background:var(--panel2); border:1px solid var(--border); border-radius:6px; color:var(--text); text-decoration:none; font-size:13px; font-weight:600;">Table ${t.number}</a>`
+    ).join("");
+  } catch (e) {}
 }
 
 async function doLogin() {
