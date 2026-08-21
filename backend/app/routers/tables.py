@@ -9,23 +9,22 @@ router = APIRouter(prefix="/api/v1/tables", tags=["tables"])
 
 
 @router.get("/resolve")
-async def resolve_table(token: str):
+async def resolve_table(token: str = ""):
     """The consumer web app calls this the moment it loads, with the token from the QR URL."""
-    try:
-        branch_id, table_id = verify_table_token(token)
-    except InvalidTableToken as e:
-        raise HTTPException(400, str(e))
-
     async with SessionLocal() as db:
-        table = await db.get(RestaurantTable, table_id)
+        table = None
+        if token:
+            try:
+                branch_id, table_id = verify_table_token(token)
+                table = await db.get(RestaurantTable, table_id)
+            except Exception:
+                table = None
+
         if table is None:
-            # Fallback 1: match table by branch
-            res = await db.execute(select(RestaurantTable).where(RestaurantTable.branch_id == branch_id))
+            # Fallback to first table in DB
+            res = await db.execute(select(RestaurantTable).order_by(RestaurantTable.number))
             table = res.scalars().first()
-        if table is None:
-            # Fallback 2: pick first table in DB
-            res = await db.execute(select(RestaurantTable))
-            table = res.scalars().first()
+
         if table is None:
             raise HTTPException(404, "No restaurant table found")
 
@@ -37,6 +36,7 @@ async def resolve_table(token: str):
         "table_number": table.number,
         "branch_name": branch.name if branch else "Orbit Kitchen",
     }
+
 
 
 

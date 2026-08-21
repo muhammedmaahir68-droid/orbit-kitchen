@@ -447,16 +447,16 @@ async function initConsumer(token) {
   showView("consumerView");
   try {
     const res = await fetch(`${API}/api/v1/tables/resolve?token=${encodeURIComponent(TOKEN)}`);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: "Invalid token" }));
-      console.error("Resolve table error:", res.status, err);
-      throw new Error(err.detail || "Invalid table token");
-    }
     const data = await res.json();
+    if (!res.ok) {
+      console.error("Resolve table error:", res.status, data);
+      throw new Error(data.detail || "Invalid table token");
+    }
     BRANCH_ID = data.branch_id;
     TABLE_NUMBER = data.table_number;
     document.getElementById("tableBadge").textContent = `Table ${TABLE_NUMBER}`;
   } catch (e) {
+
     document.body.innerHTML = `
       <div style="text-align:center; padding:40px 20px; color:var(--text); max-width:400px; margin:40px auto;">
         <h2 style="color:#ff7a45; font-size:20px; margin-bottom:8px;">ORBIT <span>Restaurant</span></h2>
