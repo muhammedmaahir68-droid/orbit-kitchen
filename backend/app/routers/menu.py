@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, delete, update
 
 from ..database import SessionLocal
-from ..models import MenuCategory, MenuItem, KitchenStation, Branch, uid
+from ..models import MenuCategory, MenuItem, KitchenStation, Branch, OrderItem, uid
 from .. import events
 
 router = APIRouter(prefix="/api/v1/menu", tags=["menu"])
@@ -55,10 +55,15 @@ async def delete_category(cat_id: str):
         cat = await db.get(MenuCategory, cat_id)
         if not cat:
             raise HTTPException(404, "Category not found")
-        # delete all items in this category first
-        items = await db.execute(select(MenuItem).where(MenuItem.category_id == cat_id))
-        for item in items.scalars().all():
-            await db.delete(item)
+        # Find all items in this category
+        items_res = await db.execute(select(MenuItem).where(MenuItem.category_id == cat_id))
+        items = items_res.scalars().all()
+        item_ids = [i.id for i in items]
+        if item_ids:
+            # Delete referenced order_items first to avoid FK violation
+            await db.execute(delete(OrderItem).where(OrderItem.menu_item_id.in_(item_ids)))
+            for item in items:
+                await db.delete(item)
         await db.delete(cat)
         await db.commit()
         return {"deleted": cat_id}
@@ -68,9 +73,13 @@ async def delete_category(cat_id: str):
 async def reset_menu(branch_id: str):
     """Wipe ALL categories and items for a branch so the cashier can start fresh."""
     async with SessionLocal() as db:
-        items = await db.execute(select(MenuItem).where(MenuItem.branch_id == branch_id))
-        for item in items.scalars().all():
-            await db.delete(item)
+        items_res = await db.execute(select(MenuItem).where(MenuItem.branch_id == branch_id))
+        items = items_res.scalars().all()
+        item_ids = [i.id for i in items]
+        if item_ids:
+            await db.execute(delete(OrderItem).where(OrderItem.menu_item_id.in_(item_ids)))
+            for item in items:
+                await db.delete(item)
         cats = await db.execute(select(MenuCategory).where(MenuCategory.branch_id == branch_id))
         for cat in cats.scalars().all():
             await db.delete(cat)
@@ -152,6 +161,8 @@ async def delete_item(item_id: str):
             raise HTTPException(404, "Item not found")
         branch_id = item.branch_id
         name = item.name
+        # Delete referenced order_items first to avoid FK violation
+        await db.execute(delete(OrderItem).where(OrderItem.menu_item_id == item_id))
         await db.delete(item)
         await db.commit()
         await events.publish(
@@ -160,6 +171,7 @@ async def delete_item(item_id: str):
             branch_id=branch_id,
         )
         return {"deleted": item_id}
+
 
 
 # ── AVAILABILITY TOGGLE ────────────────────────────────────────────────────────
