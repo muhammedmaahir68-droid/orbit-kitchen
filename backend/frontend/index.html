@@ -710,22 +710,51 @@ function connectOrderWS(orderId) {
   ws.onclose = () => setTimeout(() => connectOrderWS(orderId), 2000);
 }
 
-// Live menu refresh for customers — connects to manager WS and re-fetches menu on availability changes
-function connectMenuWS(branchId) {
-  const ws = new WebSocket(`${WS}/ws/manager/${branchId}`);
-  ws.onmessage = (evt) => {
-    try {
-      const data = JSON.parse(evt.data);
-      const menuEvents = ["MenuItemAvailabilityChanged", "MenuItemAdded", "MenuItemRemoved"];
-      if (menuEvents.includes(data.event_type)) {
-        // Re-fetch and re-render menu live
-        fetch(`${API}/api/v1/menu?branch_id=${branchId}`)
-          .then(r => r.json()).then(m => { MENU = m; renderMenu(); });
-      }
-    } catch (e) {}
-  };
-  ws.onclose = () => setTimeout(() => connectMenuWS(branchId), 3000);
+// Live menu refresh for customers — WebSocket + 4s Auto Polling
+let menuSyncTimer = null;
+
+function startMenuAutoSync() {
+  if (menuSyncTimer) clearInterval(menuSyncTimer);
+  menuSyncTimer = setInterval(() => {
+    const mv = document.getElementById("menuView");
+    if (mv && !mv.classList.contains("hidden")) {
+      fetchMenuSilent();
+    }
+  }, 4000);
 }
+
+async function fetchMenuSilent() {
+  const url = BRANCH_ID ? `${API}/api/v1/menu?branch_id=${encodeURIComponent(BRANCH_ID)}` : `${API}/api/v1/menu`;
+  try {
+    const res = await fetch(url);
+    if (res.ok) {
+      const fresh = await res.json();
+      if (JSON.stringify(fresh) !== JSON.stringify(MENU)) {
+        MENU = fresh;
+        renderMenu();
+      }
+    }
+  } catch (e) {}
+}
+
+function connectMenuWS(branchId) {
+  if (!branchId) return;
+  startMenuAutoSync();
+  try {
+    const ws = new WebSocket(`${WS}/ws/manager/${branchId}`);
+    ws.onmessage = (evt) => {
+      try {
+        const data = JSON.parse(evt.data);
+        const menuEvents = ["MenuItemAvailabilityChanged", "MenuItemAdded", "MenuItemRemoved", "MenuCategoryAdded"];
+        if (menuEvents.includes(data.event_type)) {
+          fetchMenuSilent();
+        }
+      } catch (e) {}
+    };
+    ws.onclose = () => setTimeout(() => connectMenuWS(branchId), 3000);
+  } catch (e) {}
+}
+
 
 // ============ KITCHEN ============
 let kBranch, audioCtx = null, soundOn = false;
