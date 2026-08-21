@@ -35,6 +35,13 @@ async def on_startup():
     await seed()
 
 
+from fastapi.responses import RedirectResponse
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/app/index.html")
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
