@@ -171,10 +171,19 @@
     <h1>ORBIT <span>Kitchen</span></h1>
     <div class="right">
       <span id="kdsStatus">connecting…</span>
+      <button class="logout" onclick="toggleKitchenMenuPanel()" id="kitchenMenuBtn">🍽️ Items</button>
       <button class="logout" onclick="enableSound()" id="soundBtn">🔇 Sound</button>
       <button class="logout" onclick="logout()">Log out</button>
     </div>
   </header>
+  <!-- Kitchen menu sold-out panel (hidden by default) -->
+  <div id="kitchenMenuPanel" style="display:none; background:var(--panel); border-bottom:1px solid var(--border); padding:16px 20px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <strong style="font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Mark Items Sold Out / Available</strong>
+      <button class="btn secondary" style="font-size:11px; padding:5px 10px;" onclick="loadKitchenMenu()">↻ Refresh</button>
+    </div>
+    <div id="kitchenMenuItems" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+  </div>
   <div id="board"></div>
   <div id="feed"></div>
 </div>
@@ -197,7 +206,7 @@
   <!-- TABLE QR GENERATOR SECTION -->
   <div style="padding:0 20px 20px;">
     <div style="background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px;">
-      <h2 style="font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0 0 12px;">Generate Table QR Codes (Print & Scan)</h2>
+      <h2 style="font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0 0 12px;">Generate Table QR Codes (Print &amp; Scan)</h2>
       <div id="cashierTableList" style="display:flex; flex-wrap:wrap; gap:10px;"></div>
       <div id="qrModal" class="hidden" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border); text-align:center;">
         <h3 id="qrModalTitle" style="font-size:15px; margin:0 0 10px; color:var(--accent);">Table QR Code</h3>
@@ -207,6 +216,30 @@
           <a id="qrOpenBtn" target="_blank" class="btn secondary" style="text-decoration:none; padding:9px 18px; font-size:13px;">🔗 Open Order Page</a>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- UPI SETTINGS PANEL -->
+  <div style="padding:0 20px 20px;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px;">
+      <h2 style="font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0 0 12px;">💳 UPI Payment Settings</h2>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <input id="upiIdInput" placeholder="e.g. yourshop@upi or 9876543210@okaxis" style="flex:1; min-width:200px; background:var(--panel2); color:var(--text); border:1px solid var(--border); padding:10px 12px; border-radius:8px; font-size:13px;" />
+        <button class="btn" style="padding:10px 18px; font-size:13px;" onclick="saveUpiId()">💾 Save UPI ID</button>
+      </div>
+      <div id="upiSaveMsg" style="font-size:12px; color:var(--accent); margin-top:8px; display:none;"></div>
+      <p style="font-size:11px; color:var(--muted); margin:10px 0 0;">This UPI ID will appear in all customer UPI QR codes. Change anytime.</p>
+    </div>
+  </div>
+
+  <!-- MENU MANAGEMENT PANEL -->
+  <div style="padding:0 20px 20px;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h2 style="font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0;">🍽️ Menu Availability (Enable / Sold Out)</h2>
+        <button class="btn secondary" style="font-size:11px; padding:6px 12px;" onclick="loadCashierMenu()">↻ Refresh</button>
+      </div>
+      <div id="cashierMenuList" style="display:flex; flex-direction:column; gap:6px;"></div>
     </div>
   </div>
 
@@ -349,7 +382,7 @@ async function loadMenu() {
 function renderMenu() {
   document.getElementById("menuList").innerHTML = MENU.map(cat => `
     <div class="category">${cat.name}</div>
-    ${cat.items.map(item => `
+    ${cat.items.map(item => item.is_available ? `
       <div class="item">
         <div><div class="name">${item.name}</div><div class="price">${money(item.price)}</div></div>
         <div class="qty">
@@ -357,6 +390,14 @@ function renderMenu() {
           <span id="qty-${item.id}">${cart[item.id]?.qty || 0}</span>
           <button class="add" onclick="changeQty('${item.id}', 1)">+</button>
         </div>
+      </div>
+    ` : `
+      <div class="item" style="opacity:0.45; pointer-events:none;">
+        <div>
+          <div class="name" style="text-decoration:line-through;">${item.name}</div>
+          <div class="price" style="color:var(--muted);">SOLD OUT</div>
+        </div>
+        <div class="qty"><span style="font-size:11px; color:var(--muted);">Not available</span></div>
       </div>
     `).join("")}
   `).join("");
@@ -396,13 +437,19 @@ async function openCart() {
 
 function closeCart() { document.getElementById("cartSheet").classList.remove("open"); }
 
-function togglePayMethodUI() {
+async function togglePayMethodUI() {
   const method = document.getElementById("payMethod").value;
   const container = document.getElementById("upiPayContainer");
   if (method === "upi") {
     const entries = Object.values(cart);
     const total = entries.reduce((s, i) => s + i.qty * i.price, 0);
-    const upiUrl = `upi://pay?pa=orbitkitchen@upi&pn=ORBIT+Restaurant&am=${total.toFixed(2)}&cu=INR&tn=Table+Order`;
+    // Fetch UPI ID saved by cashier (fallback to demo UPI)
+    let upiId = "orbitkitchen@upi";
+    try {
+      const r = await fetch(`${API}/api/v1/menu/settings/upi?branch_id=${BRANCH_ID}`);
+      if (r.ok) { const d = await r.json(); if (d.upi_id) upiId = d.upi_id; }
+    } catch (e) {}
+    const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=ORBIT+Restaurant&am=${total.toFixed(2)}&cu=INR&tn=Table+Order`;
     const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiUrl)}`;
     document.getElementById("upiQrImg").innerHTML = `<img src="${qrImgUrl}" width="150" height="150" alt="UPI QR" style="display:block;" />`;
     document.getElementById("upiDeepLink").href = upiUrl;
@@ -582,8 +629,102 @@ function initCashier(branchId) {
   cBranch = branchId;
   loadActiveOrders();
   loadCashierTables();
+  loadUpiId();
+  loadCashierMenu();
   connectCashierWS();
 }
+
+async function loadUpiId() {
+  try {
+    const res = await fetch(`${API}/api/v1/menu/settings/upi?branch_id=${cBranch}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    document.getElementById("upiIdInput").value = data.upi_id || "";
+  } catch (e) {}
+}
+
+async function saveUpiId() {
+  const val = document.getElementById("upiIdInput").value.trim();
+  if (!val) return;
+  await fetch(`${API}/api/v1/menu/settings/upi?branch_id=${cBranch}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ upi_id: val }),
+  });
+  const msg = document.getElementById("upiSaveMsg");
+  msg.textContent = `✅ Saved: ${val}`;
+  msg.style.display = "block";
+  setTimeout(() => { msg.style.display = "none"; }, 3000);
+}
+
+async function loadCashierMenu() {
+  try {
+    const res = await fetch(`${API}/api/v1/menu?branch_id=${cBranch}`);
+    if (!res.ok) return;
+    const cats = await res.json();
+    const container = document.getElementById("cashierMenuList");
+    let html = "";
+    for (const cat of cats) {
+      html += `<div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-top:10px; margin-bottom:4px;">${cat.name}</div>`;
+      for (const item of cat.items) {
+        const avail = item.is_available;
+        html += `<div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--panel2); border-radius:8px; border:1px solid ${avail ? "var(--border)" : "#ff4444"};">
+          <span style="${avail ? "" : "text-decoration:line-through; opacity:0.5;"}">${item.name} — ${money(item.price)}</span>
+          <button onclick="toggleItemAvailability('${item.id}', ${!avail})" style="font-size:11px; padding:4px 10px; border-radius:4px; border:none; cursor:pointer; background:${avail ? "#ff4444" : "var(--accent)"}; color:${avail ? "#fff" : "#111"}; font-weight:600;">
+            ${avail ? "🚫 Sold Out" : "✅ Available"}
+          </button>
+        </div>`;
+      }
+    }
+    container.innerHTML = html || "<p style='color:var(--muted); font-size:12px;'>No menu items found.</p>";
+  } catch (e) {}
+}
+
+async function toggleItemAvailability(itemId, makeAvailable) {
+  await fetch(`${API}/api/v1/menu/${itemId}/availability`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_available: makeAvailable }),
+  });
+  loadCashierMenu();
+}
+
+// Kitchen menu management
+let kMenuLoaded = false;
+function toggleKitchenMenuPanel() {
+  const panel = document.getElementById("kitchenMenuPanel");
+  const visible = panel.style.display !== "none";
+  panel.style.display = visible ? "none" : "block";
+  if (!visible && !kMenuLoaded) { loadKitchenMenu(); kMenuLoaded = true; }
+}
+
+async function loadKitchenMenu() {
+  try {
+    const res = await fetch(`${API}/api/v1/menu?branch_id=${kBranch}`);
+    if (!res.ok) return;
+    const cats = await res.json();
+    const container = document.getElementById("kitchenMenuItems");
+    let html = "";
+    for (const cat of cats) {
+      for (const item of cat.items) {
+        const avail = item.is_available;
+        html += `<button onclick="toggleKitchenItem('${item.id}', ${!avail})"
+          style="padding:7px 14px; border-radius:8px; border:2px solid ${avail ? "var(--accent)" : "#ff4444"}; background:${avail ? "transparent" : "#ff444422"}; color:${avail ? "var(--text)" : "#ff4444"}; cursor:pointer; font-size:12px; font-weight:600;">
+          ${avail ? "✅" : "🚫"} ${item.name}
+        </button>`;
+      }
+    }
+    container.innerHTML = html || "<p style='color:var(--muted);font-size:12px;'>No items.</p>";
+    kMenuLoaded = true;
+  } catch (e) {}
+}
+
+async function toggleKitchenItem(itemId, makeAvailable) {
+  await fetch(`${API}/api/v1/menu/${itemId}/availability`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_available: makeAvailable }),
+  });
+  loadKitchenMenu();
+}
+
 
 async function loadCashierTables() {
   try {
@@ -597,6 +738,7 @@ async function loadCashierTables() {
     ).join("");
   } catch (e) {}
 }
+
 
 function showQrForTable(number, token) {
   const modal = document.getElementById("qrModal");

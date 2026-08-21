@@ -58,6 +58,7 @@ class Branch(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=uid)
     restaurant_id: Mapped[str] = mapped_column(ForeignKey("restaurants.id"))
     name: Mapped[str] = mapped_column(String)
+    upi_id: Mapped[str] = mapped_column(String, default="")   # cashier-configurable UPI VPA
     restaurant: Mapped["Restaurant"] = relationship(back_populates="branches")
     tables: Mapped[list["RestaurantTable"]] = relationship(back_populates="branch")
     stations: Mapped[list["KitchenStation"]] = relationship(back_populates="branch")
