@@ -35,8 +35,14 @@ class InvalidTableToken(Exception):
 def verify_table_token(token: str) -> tuple[str, str]:
     """Returns (branch_id, table_id) or raises InvalidTableToken."""
     try:
-        padded = token + "=" * (-len(token) % 4)
-        raw = base64.urlsafe_b64decode(padded.encode()).decode()
+        clean = token.strip()
+        # Handle cases where '+' in base64 was decoded as space by web server or browser
+        padded = clean + "=" * (-len(clean) % 4)
+        try:
+            raw = base64.urlsafe_b64decode(padded.encode()).decode()
+        except Exception:
+            padded_alt = clean.replace(" ", "+") + "=" * (-len(clean) % 4)
+            raw = base64.b64decode(padded_alt.encode()).decode()
         branch_id, table_id, sig = raw.split(":")
     except Exception:
         raise InvalidTableToken("Malformed token")
@@ -46,6 +52,7 @@ def verify_table_token(token: str) -> tuple[str, str]:
         raise InvalidTableToken("Signature mismatch — token was tampered with")
 
     return branch_id, table_id
+
 
 
 # --- Staff password hashing (PBKDF2, no extra dependency needed) ---

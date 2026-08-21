@@ -447,15 +447,26 @@ async function initConsumer(token) {
   showView("consumerView");
   try {
     const res = await fetch(`${API}/api/v1/tables/resolve?token=${encodeURIComponent(TOKEN)}`);
-    if (!res.ok) throw new Error();
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Invalid token" }));
+      console.error("Resolve table error:", res.status, err);
+      throw new Error(err.detail || "Invalid table token");
+    }
     const data = await res.json();
     BRANCH_ID = data.branch_id;
     TABLE_NUMBER = data.table_number;
     document.getElementById("tableBadge").textContent = `Table ${TABLE_NUMBER}`;
   } catch (e) {
-    document.body.innerHTML = "<p style='text-align:center;padding:40px;color:#ff6b6b;'>This QR code isn't valid. Please ask staff for help.</p>";
+    document.body.innerHTML = `
+      <div style="text-align:center; padding:40px 20px; color:var(--text); max-width:400px; margin:40px auto;">
+        <h2 style="color:#ff7a45; font-size:20px; margin-bottom:8px;">ORBIT <span>Restaurant</span></h2>
+        <p style="color:#ff6b6b; font-size:14px; font-weight:600;">⚠️ Could not connect to table session</p>
+        <p style="color:var(--muted); font-size:13px; margin-bottom:24px;">Please re-scan the QR code on your table, or ask restaurant staff for assistance.</p>
+        <button class="btn" style="width:100%;" onclick="location.reload()">↻ Tap to Retry</button>
+      </div>`;
     return;
   }
+
   
   if (currentOrderId) {
     // Check if current stored order is still active
@@ -1069,7 +1080,7 @@ function showQrForTable(number, token) {
   const downloadBtn = document.getElementById("qrDownloadBtn");
   const openBtn = document.getElementById("qrOpenBtn");
 
-  const targetUrl = `${window.location.origin}${window.location.pathname}?t=${token}`;
+  const targetUrl = `${window.location.origin}${window.location.pathname}?t=${encodeURIComponent(token)}`;
   const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(targetUrl)}`;
 
   title.textContent = `Table ${number} — Scan or Download QR Code`;
@@ -1079,6 +1090,7 @@ function showQrForTable(number, token) {
   openBtn.href = targetUrl;
   modal.classList.remove("hidden");
 }
+
 
 async function loadActiveOrders() {
   const res = await fetch(`${API}/api/v1/orders?branch_id=${cBranch}`);
