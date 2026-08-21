@@ -114,16 +114,9 @@
     </div>
 
     <div id="staffLogin">
-      <div class="role-tabs">
-        <button id="tabCustomer" class="active" onclick="showTab('customer')">Customer</button>
-        <button id="tabStaff" onclick="showTab('staff')">Staff Login</button>
-      </div>
-      <div id="customerTab">
-        <p style="text-align:center; color:var(--muted); font-size:13px;">Scan the QR code on your table to order.</p>
-      </div>
-      <div id="staffTab" class="hidden">
-        <div class="field"><label>Username</label><input id="loginUser" placeholder="kitchen or cashier" /></div>
-        <div class="field"><label>Password</label><input id="loginPass" type="password" placeholder="••••••••" /></div>
+      <div id="staffTab">
+        <div class="field"><label>Username</label><input id="loginUser" placeholder="Enter username (e.g. cashier or kitchen)" onkeydown="if(event.key==='Enter') doLogin()" /></div>
+        <div class="field"><label>Password</label><input id="loginPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter') doLogin()" /></div>
         <button class="btn" style="width:100%" onclick="doLogin()">Log in</button>
         <div id="loginErr"></div>
       </div>
@@ -205,10 +198,14 @@ function showView(id) {
 }
 
 function showTab(tab) {
-  document.getElementById("tabCustomer").classList.toggle("active", tab === "customer");
-  document.getElementById("tabStaff").classList.toggle("active", tab === "staff");
-  document.getElementById("customerTab").classList.toggle("hidden", tab !== "customer");
-  document.getElementById("staffTab").classList.toggle("hidden", tab !== "staff");
+  const tc = document.getElementById("tabCustomer");
+  const ts = document.getElementById("tabStaff");
+  const ct = document.getElementById("customerTab");
+  const st = document.getElementById("staffTab");
+  if (tc) tc.classList.toggle("active", tab === "customer");
+  if (ts) ts.classList.toggle("active", tab === "staff");
+  if (ct) ct.classList.toggle("hidden", tab !== "customer");
+  if (st) st.classList.toggle("hidden", tab !== "staff");
 }
 
 function logout() {
