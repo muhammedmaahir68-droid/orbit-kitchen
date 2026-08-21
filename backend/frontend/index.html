@@ -232,13 +232,39 @@
     </div>
   </div>
 
-  <!-- MENU MANAGEMENT PANEL -->
+  <!-- ═══════════════════ MENU BUILDER PANEL ═══════════════════ -->
   <div style="padding:0 20px 20px;">
     <div style="background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h2 style="font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0;">🍽️ Menu Availability (Enable / Sold Out)</h2>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h2 style="font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0;">🍽️ Menu Builder — Add / Remove Items</h2>
         <button class="btn secondary" style="font-size:11px; padding:6px 12px;" onclick="loadCashierMenu()">↻ Refresh</button>
       </div>
+
+      <!-- Add Category -->
+      <div style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:12px;">
+        <strong style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Add New Category</strong>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input id="newCatName" placeholder="e.g. Breakfast, Mains, Drinks…" style="flex:1; background:var(--panel); color:var(--text); border:1px solid var(--border); padding:9px 12px; border-radius:6px; font-size:13px;" />
+          <button class="btn" style="padding:9px 14px; font-size:12px;" onclick="addCategory()">+ Add</button>
+        </div>
+      </div>
+
+      <!-- Add Item -->
+      <div style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:14px;">
+        <strong style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Add New Item</strong>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+          <input id="newItemName" placeholder="Item name" style="background:var(--panel); color:var(--text); border:1px solid var(--border); padding:9px 12px; border-radius:6px; font-size:13px;" />
+          <input id="newItemPrice" type="number" step="0.5" min="0" placeholder="Price (₹)" style="background:var(--panel); color:var(--text); border:1px solid var(--border); padding:9px 12px; border-radius:6px; font-size:13px;" />
+          <select id="newItemCat" style="background:var(--panel); color:var(--text); border:1px solid var(--border); padding:9px 12px; border-radius:6px; font-size:13px;"><option value="">— Select category —</option></select>
+          <select id="newItemStation" style="background:var(--panel); color:var(--text); border:1px solid var(--border); padding:9px 12px; border-radius:6px; font-size:13px;"><option value="Main Kitchen">Main Kitchen</option><option value="Fry Station">Fry Station</option><option value="Beverage Station">Beverage Station</option><option value="Dessert Station">Dessert Station</option></select>
+        </div>
+        <div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
+          <input id="newItemPrep" type="number" min="30" placeholder="Prep time (sec)" value="600" style="background:var(--panel); color:var(--text); border:1px solid var(--border); padding:9px 12px; border-radius:6px; font-size:13px; width:160px;" />
+          <button class="btn" style="padding:9px 18px; font-size:12px;" onclick="addItem()">+ Add Item</button>
+        </div>
+      </div>
+
+      <!-- Current Menu List -->
       <div id="cashierMenuList" style="display:flex; flex-direction:column; gap:6px;"></div>
     </div>
   </div>
@@ -377,6 +403,7 @@ async function loadMenu() {
   const res = await fetch(`${API}/api/v1/menu?branch_id=${BRANCH_ID}`);
   MENU = await res.json();
   renderMenu();
+  connectMenuWS(BRANCH_ID);  // live updates: kitchen marks items sold-out → auto refresh
 }
 
 function renderMenu() {
@@ -541,6 +568,23 @@ function connectOrderWS(orderId) {
   ws.onclose = () => setTimeout(() => connectOrderWS(orderId), 2000);
 }
 
+// Live menu refresh for customers — connects to manager WS and re-fetches menu on availability changes
+function connectMenuWS(branchId) {
+  const ws = new WebSocket(`${WS}/ws/manager/${branchId}`);
+  ws.onmessage = (evt) => {
+    try {
+      const data = JSON.parse(evt.data);
+      const menuEvents = ["MenuItemAvailabilityChanged", "MenuItemAdded", "MenuItemRemoved"];
+      if (menuEvents.includes(data.event_type)) {
+        // Re-fetch and re-render menu live
+        fetch(`${API}/api/v1/menu?branch_id=${branchId}`)
+          .then(r => r.json()).then(m => { MENU = m; renderMenu(); });
+      }
+    } catch (e) {}
+  };
+  ws.onclose = () => setTimeout(() => connectMenuWS(branchId), 3000);
+}
+
 // ============ KITCHEN ============
 let kBranch, audioCtx = null, soundOn = false;
 
@@ -656,36 +700,104 @@ async function saveUpiId() {
   setTimeout(() => { msg.style.display = "none"; }, 3000);
 }
 
+// Cashier menu CRUD
+let _cashierCats = [];
+
 async function loadCashierMenu() {
   try {
     const res = await fetch(`${API}/api/v1/menu?branch_id=${cBranch}`);
     if (!res.ok) return;
     const cats = await res.json();
+    _cashierCats = cats;
+
+    // Refresh category dropdown for new-item form
+    const sel = document.getElementById("newItemCat");
+    if (sel) {
+      sel.innerHTML = `<option value="">— Select category —</option>` +
+        cats.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+    }
+
     const container = document.getElementById("cashierMenuList");
+    if (cats.length === 0) {
+      container.innerHTML = `<p style='color:var(--muted); font-size:12px; text-align:center; padding:12px;'>No menu items yet. Add a category above, then add items.</p>`;
+      return;
+    }
+
     let html = "";
     for (const cat of cats) {
-      html += `<div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-top:10px; margin-bottom:4px;">${cat.name}</div>`;
-      for (const item of cat.items) {
-        const avail = item.is_available;
-        html += `<div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--panel2); border-radius:8px; border:1px solid ${avail ? "var(--border)" : "#ff4444"};">
-          <span style="${avail ? "" : "text-decoration:line-through; opacity:0.5;"}">${item.name} — ${money(item.price)}</span>
-          <button onclick="toggleItemAvailability('${item.id}', ${!avail})" style="font-size:11px; padding:4px 10px; border-radius:4px; border:none; cursor:pointer; background:${avail ? "#ff4444" : "var(--accent)"}; color:${avail ? "#fff" : "#111"}; font-weight:600;">
-            ${avail ? "🚫 Sold Out" : "✅ Available"}
-          </button>
+      html += `
+        <div style="background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:6px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="font-weight:700; font-size:13px; color:var(--accent);">${cat.name}</span>
+            <button onclick="deleteCategory('${cat.id}')" style="font-size:10px; padding:3px 8px; border-radius:4px; border:1px solid #ff4444; background:transparent; color:#ff4444; cursor:pointer;">🗑 Delete Category</button>
+          </div>
+          ${cat.items.length === 0 ? `<p style='color:var(--muted); font-size:11px; margin:0;'>No items yet.</p>` :
+            cat.items.map(item => {
+              const avail = item.is_available;
+              return `<div style="display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-top:1px solid var(--border);">
+                <span style="${avail ? "" : "text-decoration:line-through; opacity:0.5;"} font-size:13px;">${item.name} <span style="color:var(--muted); font-size:11px;">${money(item.price)}</span></span>
+                <div style="display:flex; gap:6px;">
+                  <button onclick="toggleItemAvailability('${item.id}', ${!avail})" style="font-size:10px; padding:3px 8px; border-radius:4px; border:none; cursor:pointer; background:${avail ? "#ff4444" : "var(--accent)"}; color:${avail ? "#fff" : "#111"}; font-weight:600;">${avail ? "🚫 Sold Out" : "✅ Available"}</button>
+                  <button onclick="deleteItem('${item.id}')" style="font-size:10px; padding:3px 8px; border-radius:4px; border:1px solid #ff4444; background:transparent; color:#ff4444; cursor:pointer;">✕</button>
+                </div>
+              </div>`;
+            }).join("")
+          }
         </div>`;
-      }
     }
-    container.innerHTML = html || "<p style='color:var(--muted); font-size:12px;'>No menu items found.</p>";
-  } catch (e) {}
+    container.innerHTML = html;
+  } catch (e) { console.error("loadCashierMenu error", e); }
+}
+
+async function addCategory() {
+  const name = document.getElementById("newCatName").value.trim();
+  if (!name) return;
+  await fetch(`${API}/api/v1/menu/categories`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ branch_id: cBranch, name }),
+  });
+  document.getElementById("newCatName").value = "";
+  loadCashierMenu();
+}
+
+async function addItem() {
+  const name = document.getElementById("newItemName").value.trim();
+  const price = parseFloat(document.getElementById("newItemPrice").value);
+  const catId = document.getElementById("newItemCat").value;
+  const station = document.getElementById("newItemStation").value;
+  const prep = parseInt(document.getElementById("newItemPrep").value) || 600;
+  if (!name || isNaN(price) || !catId) {
+    alert("Please fill in item name, price and select a category."); return;
+  }
+  await fetch(`${API}/api/v1/menu/items`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ branch_id: cBranch, category_id: catId, name, price, avg_prep_seconds: prep, station_name: station }),
+  });
+  document.getElementById("newItemName").value = "";
+  document.getElementById("newItemPrice").value = "";
+  loadCashierMenu();
+}
+
+async function deleteItem(itemId) {
+  if (!confirm("Remove this item from the menu?")) return;
+  await fetch(`${API}/api/v1/menu/items/${itemId}`, { method: "DELETE" });
+  loadCashierMenu();
+}
+
+async function deleteCategory(catId) {
+  if (!confirm("Delete this category and ALL its items?")) return;
+  await fetch(`${API}/api/v1/menu/categories/${catId}`, { method: "DELETE" });
+  loadCashierMenu();
 }
 
 async function toggleItemAvailability(itemId, makeAvailable) {
-  await fetch(`${API}/api/v1/menu/${itemId}/availability`, {
+  await fetch(`${API}/api/v1/menu/items/${itemId}/availability`, {
     method: "PATCH", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ is_available: makeAvailable }),
   });
   loadCashierMenu();
 }
+
 
 // Kitchen menu management
 let kMenuLoaded = false;
@@ -704,6 +816,8 @@ async function loadKitchenMenu() {
     const container = document.getElementById("kitchenMenuItems");
     let html = "";
     for (const cat of cats) {
+      if (cat.items.length === 0) continue;
+      html += `<div style="width:100%; font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-top:6px;">${cat.name}</div>`;
       for (const item of cat.items) {
         const avail = item.is_available;
         html += `<button onclick="toggleKitchenItem('${item.id}', ${!avail})"
@@ -712,13 +826,13 @@ async function loadKitchenMenu() {
         </button>`;
       }
     }
-    container.innerHTML = html || "<p style='color:var(--muted);font-size:12px;'>No items.</p>";
+    container.innerHTML = html || "<p style='color:var(--muted);font-size:12px;'>No items on the menu yet.</p>";
     kMenuLoaded = true;
   } catch (e) {}
 }
 
 async function toggleKitchenItem(itemId, makeAvailable) {
-  await fetch(`${API}/api/v1/menu/${itemId}/availability`, {
+  await fetch(`${API}/api/v1/menu/items/${itemId}/availability`, {
     method: "PATCH", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ is_available: makeAvailable }),
   });

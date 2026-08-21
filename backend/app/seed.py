@@ -1,12 +1,12 @@
 """
-DEVELOPMENT-ONLY seed data. This creates one restaurant/branch/tables/stations/menu
-so the vertical slice is runnable immediately. This is NOT synthetic analytics data —
-it is just the static catalog (tables, stations, menu) a real restaurant would enter
-once through an onboarding flow. No order/forecast data is faked here.
+Minimal bootstrap seed. Creates one restaurant / branch / tables / kitchen-stations
+and two staff accounts so the system is operational on first boot.
+
+The MENU is intentionally left empty — the Cashier builds it from the dashboard.
 """
 from sqlalchemy import select
 from .database import SessionLocal
-from .models import Restaurant, Branch, RestaurantTable, KitchenStation, MenuCategory, MenuItem, StaffUser, uid
+from .models import Restaurant, Branch, RestaurantTable, KitchenStation, StaffUser, uid
 from .security import hash_password
 
 
@@ -14,9 +14,9 @@ async def seed():
     async with SessionLocal() as db:
         existing = await db.execute(select(Restaurant))
         if existing.scalars().first():
-            return  # already seeded
+            return  # already bootstrapped
 
-        restaurant = Restaurant(id=uid(), name="Orbit Demo Kitchen")
+        restaurant = Restaurant(id=uid(), name="Orbit Kitchen")
         branch = Branch(id=uid(), restaurant_id=restaurant.id, name="Main Branch")
         db.add_all([restaurant, branch])
         await db.flush()
@@ -31,24 +31,7 @@ async def seed():
         db.add_all(stations.values())
         await db.flush()
 
-        category = MenuCategory(id=uid(), branch_id=branch.id, name="Mains")
-        db.add(category)
-        await db.flush()
-
-        menu_items = [
-            MenuItem(id=uid(), branch_id=branch.id, category_id=category.id, station_id=stations["Main Kitchen"].id,
-                     name="Chicken Biryani", price=8.5, avg_prep_seconds=720),
-            MenuItem(id=uid(), branch_id=branch.id, category_id=category.id, station_id=stations["Fry Station"].id,
-                     name="French Fries", price=3.0, avg_prep_seconds=300),
-            MenuItem(id=uid(), branch_id=branch.id, category_id=category.id, station_id=stations["Beverage Station"].id,
-                     name="Lime Juice", price=2.0, avg_prep_seconds=120),
-            MenuItem(id=uid(), branch_id=branch.id, category_id=category.id, station_id=stations["Dessert Station"].id,
-                     name="Ice Cream", price=2.5, avg_prep_seconds=90),
-        ]
-        db.add_all(menu_items)
-        await db.commit()
-
-        # Demo staff logins — CHANGE THESE before any real deployment.
+        # Minimal staff — cashier should change these via the dashboard.
         staff = [
             StaffUser(id=uid(), branch_id=branch.id, username="kitchen", name="Kitchen Staff",
                       role="KITCHEN", password_hash=hash_password("kitchen123")),
@@ -58,8 +41,6 @@ async def seed():
         db.add_all(staff)
         await db.commit()
 
-        print(f"Seeded restaurant={restaurant.id} branch={branch.id}")
-        print(f"Table IDs: {[t.id for t in tables]}")
-        print(f"Menu item IDs: {[(m.name, m.id) for m in menu_items]}")
-        print("Demo logins: kitchen/kitchen123, cashier/cashier123")
-        return restaurant, branch, tables, menu_items
+        print(f"Bootstrap complete: restaurant={restaurant.id} branch={branch.id}")
+        print("Default logins: kitchen / kitchen123  |  cashier / cashier123")
+        print("⚠️  Menu is EMPTY — log in as cashier and build the menu from the dashboard.")
