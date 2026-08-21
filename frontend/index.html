@@ -169,7 +169,7 @@
 <!-- ============ CASHIER VIEW ============ -->
 <div id="cashierView" class="hidden">
   <header class="appbar">
-    <h1>ORBIT <span>Cashier</span></h1>
+    <h1>ORBIT <span>Cashier & Management</span></h1>
     <div class="right">
       <span id="cashierStatus">connecting…</span>
       <button class="logout" onclick="logout()">Log out</button>
@@ -180,6 +180,23 @@
     <div class="stat"><div class="label">Revenue (open + served)</div><div class="value" id="revenue">₹0</div></div>
     <div class="stat"><div class="label">Ready for Pickup</div><div class="value" id="readyCount">0</div></div>
   </div>
+
+  <!-- TABLE QR GENERATOR SECTION -->
+  <div style="padding:0 20px 20px;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px;">
+      <h2 style="font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin:0 0 12px;">Generate Table QR Codes (Print & Scan)</h2>
+      <div id="cashierTableList" style="display:flex; flex-wrap:wrap; gap:10px;"></div>
+      <div id="qrModal" class="hidden" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border); text-align:center;">
+        <h3 id="qrModalTitle" style="font-size:15px; margin:0 0 10px; color:var(--accent);">Table QR Code</h3>
+        <div id="qrImageContainer" style="margin:10px auto; background:#fff; padding:12px; border-radius:12px; display:inline-block; box-shadow:0 4px 12px rgba(0,0,0,0.3);"></div>
+        <div style="margin-top:12px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+          <a id="qrDownloadBtn" download="table_qr.png" target="_blank" class="btn" style="text-decoration:none; padding:9px 18px; font-size:13px;">📥 Download QR Image</a>
+          <a id="qrOpenBtn" target="_blank" class="btn secondary" style="text-decoration:none; padding:9px 18px; font-size:13px;">🔗 Open Order Page</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="ordersTable">
     <table>
       <thead><tr><th>Order</th><th>Table</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>
@@ -521,7 +538,39 @@ let cBranch, cOrders = {};
 function initCashier(branchId) {
   cBranch = branchId;
   loadActiveOrders();
+  loadCashierTables();
   connectCashierWS();
+}
+
+async function loadCashierTables() {
+  try {
+    const res = await fetch(`${API}/api/v1/tables?branch_id=${cBranch}`);
+    if (!res.ok) return;
+    const tables = await res.json();
+    const container = document.getElementById("cashierTableList");
+    if (!container) return;
+    container.innerHTML = tables.map(t =>
+      `<button class="btn secondary" style="font-size:12px; padding:8px 14px;" onclick="showQrForTable(${t.number}, '${t.token}')">📲 Table ${t.number} QR</button>`
+    ).join("");
+  } catch (e) {}
+}
+
+function showQrForTable(number, token) {
+  const modal = document.getElementById("qrModal");
+  const title = document.getElementById("qrModalTitle");
+  const imgContainer = document.getElementById("qrImageContainer");
+  const downloadBtn = document.getElementById("qrDownloadBtn");
+  const openBtn = document.getElementById("qrOpenBtn");
+
+  const targetUrl = `${window.location.origin}${window.location.pathname}?t=${token}`;
+  const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(targetUrl)}`;
+
+  title.textContent = `Table ${number} — Scan or Download QR Code`;
+  imgContainer.innerHTML = `<img src="${qrApiUrl}" width="220" height="220" alt="Table ${number} QR Code" style="display:block;" />`;
+  downloadBtn.href = qrApiUrl;
+  downloadBtn.download = `table_${number}_qr.png`;
+  openBtn.href = targetUrl;
+  modal.classList.remove("hidden");
 }
 
 async function loadActiveOrders() {
