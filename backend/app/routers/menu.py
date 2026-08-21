@@ -15,13 +15,23 @@ router = APIRouter(prefix="/api/v1/menu", tags=["menu"])
 # ── GET MENU (customer-facing, shows all items with is_available flag) ─────────
 
 @router.get("")
-async def get_menu(branch_id: str):
+async def get_menu(branch_id: str | None = None):
     """Return all menu items for a branch (available + unavailable, so customers see SOLD OUT)."""
     async with SessionLocal() as db:
-        cat_result = await db.execute(select(MenuCategory).where(MenuCategory.branch_id == branch_id))
-        categories = cat_result.scalars().all()
-        item_result = await db.execute(select(MenuItem).where(MenuItem.branch_id == branch_id))
-        items = item_result.scalars().all()
+        if branch_id:
+            cat_result = await db.execute(select(MenuCategory).where(MenuCategory.branch_id == branch_id))
+            categories = cat_result.scalars().all()
+            item_result = await db.execute(select(MenuItem).where(MenuItem.branch_id == branch_id))
+            items = item_result.scalars().all()
+        else:
+            categories = []
+            items = []
+
+        if not categories:
+            cat_result = await db.execute(select(MenuCategory))
+            categories = cat_result.scalars().all()
+            item_result = await db.execute(select(MenuItem))
+            items = item_result.scalars().all()
 
     items_by_cat: dict[str, list] = {}
     for i in items:
@@ -49,7 +59,12 @@ async def create_category(body: CategoryCreate):
         cat = MenuCategory(id=uid(), branch_id=body.branch_id, name=body.name.strip())
         db.add(cat)
         await db.commit()
+        await events.publish(
+            "MenuCategoryAdded", "menu_category", cat.id,
+            {"name": cat.name}, branch_id=body.branch_id,
+        )
         return {"id": cat.id, "name": cat.name, "branch_id": cat.branch_id}
+
 
 
 @router.delete("/categories/{cat_id}")

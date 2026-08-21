@@ -498,11 +498,19 @@ async function initConsumer(token) {
 
 
 async function loadMenu() {
-  const res = await fetch(`${API}/api/v1/menu?branch_id=${BRANCH_ID}`);
-  MENU = await res.json();
-  renderMenu();
-  connectMenuWS(BRANCH_ID);  // live updates: kitchen marks items sold-out → auto refresh
+  const url = BRANCH_ID ? `${API}/api/v1/menu?branch_id=${encodeURIComponent(BRANCH_ID)}` : `${API}/api/v1/menu`;
+  try {
+    const res = await fetch(url);
+    if (res.ok) {
+      MENU = await res.json();
+      renderMenu();
+    }
+  } catch (e) {
+    console.error("loadMenu error", e);
+  }
+  if (BRANCH_ID) connectMenuWS(BRANCH_ID);
 }
+
 
 function renderMenu() {
   const container = document.getElementById("menuList");
