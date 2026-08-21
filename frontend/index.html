@@ -856,11 +856,19 @@ async function loadRevenue() {
 }
 
 async function resetAllMenu() {
-  if (!confirm("⚠️ This will DELETE all menu categories and items. Are you sure?")) return;
+  if (!confirm("⚠️ This will DELETE all demo menu items and old demo orders. Are you sure?")) return;
   const r = await fetch(`${API}/api/v1/menu/reset?branch_id=${cBranch}`, { method: "DELETE" });
-  if (r.ok) { await loadCashierMenu(); alert("✅ All menu items deleted successfully!"); }
-  else { alert("Failed to reset menu."); }
+  if (r.ok) {
+    cOrders = {};
+    await loadCashierMenu();
+    await loadActiveOrders();
+    await loadRevenue();
+    alert("✅ System reset! All demo items & orders deleted. Ready to build fresh menu.");
+  } else {
+    alert("Failed to reset system.");
+  }
 }
+
 
 
 function initCashier(branchId) {

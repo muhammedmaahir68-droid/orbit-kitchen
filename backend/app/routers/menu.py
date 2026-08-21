@@ -3,7 +3,10 @@ from pydantic import BaseModel
 from sqlalchemy import select, delete, update
 
 from ..database import SessionLocal
-from ..models import MenuCategory, MenuItem, KitchenStation, Branch, OrderItem, uid
+from ..models import (
+    MenuCategory, MenuItem, KitchenStation, Branch, Order, OrderItem,
+    KitchenTask, RestaurantTable, TableStatus, uid
+)
 from .. import events
 
 router = APIRouter(prefix="/api/v1/menu", tags=["menu"])
@@ -55,13 +58,18 @@ async def delete_category(cat_id: str):
         cat = await db.get(MenuCategory, cat_id)
         if not cat:
             raise HTTPException(404, "Category not found")
-        # Find all items in this category
+        # 1. Find all items in this category
         items_res = await db.execute(select(MenuItem).where(MenuItem.category_id == cat_id))
         items = items_res.scalars().all()
         item_ids = [i.id for i in items]
         if item_ids:
-            # Delete referenced order_items first to avoid FK violation
-            await db.execute(delete(OrderItem).where(OrderItem.menu_item_id.in_(item_ids)))
+            # 2. Find order items using these menu items
+            ois_res = await db.execute(select(OrderItem.id).where(OrderItem.menu_item_id.in_(item_ids)))
+            oi_ids = [oi for oi in ois_res.scalars().all()]
+            if oi_ids:
+                # Delete dependent kitchen tasks and order items first to avoid FK errors
+                await db.execute(delete(KitchenTask).where(KitchenTask.order_item_id.in_(oi_ids)))
+                await db.execute(delete(OrderItem).where(OrderItem.id.in_(oi_ids)))
             for item in items:
                 await db.delete(item)
         await db.delete(cat)
@@ -71,20 +79,34 @@ async def delete_category(cat_id: str):
 
 @router.delete("/reset")
 async def reset_menu(branch_id: str):
-    """Wipe ALL categories and items for a branch so the cashier can start fresh."""
+    """Wipe ALL categories, items, orders, and kitchen tasks for a branch so the cashier starts 100% fresh."""
     async with SessionLocal() as db:
+        # 1. Delete all kitchen tasks, order items, and orders for this branch
+        orders_res = await db.execute(select(Order.id).where(Order.branch_id == branch_id))
+        order_ids = [o for o in orders_res.scalars().all()]
+        if order_ids:
+            await db.execute(delete(KitchenTask).where(KitchenTask.order_id.in_(order_ids)))
+            await db.execute(delete(OrderItem).where(OrderItem.order_id.in_(order_ids)))
+            await db.execute(delete(Order).where(Order.id.in_(order_ids)))
+
+        # 2. Reset all tables for this branch to AVAILABLE
+        tables_res = await db.execute(select(RestaurantTable).where(RestaurantTable.branch_id == branch_id))
+        for tbl in tables_res.scalars().all():
+            tbl.status = TableStatus.AVAILABLE
+
+        # 3. Delete all menu items
         items_res = await db.execute(select(MenuItem).where(MenuItem.branch_id == branch_id))
-        items = items_res.scalars().all()
-        item_ids = [i.id for i in items]
-        if item_ids:
-            await db.execute(delete(OrderItem).where(OrderItem.menu_item_id.in_(item_ids)))
-            for item in items:
-                await db.delete(item)
-        cats = await db.execute(select(MenuCategory).where(MenuCategory.branch_id == branch_id))
-        for cat in cats.scalars().all():
+        for item in items_res.scalars().all():
+            await db.delete(item)
+
+        # 4. Delete all categories
+        cats_res = await db.execute(select(MenuCategory).where(MenuCategory.branch_id == branch_id))
+        for cat in cats_res.scalars().all():
             await db.delete(cat)
+
         await db.commit()
         return {"reset": True, "branch_id": branch_id}
+
 
 
 # ── MENU ITEMS ─────────────────────────────────────────────────────────────────
