@@ -119,10 +119,6 @@
         <div class="field"><label>Password</label><input id="loginPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter') doLogin()" /></div>
         <button class="btn" style="width:100%" onclick="doLogin()">Log in</button>
         <div id="loginErr"></div>
-        <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:16px;">
-          <p style="font-size:11px; color:var(--muted); text-align:center; margin:0 0 10px; text-transform:uppercase; letter-spacing:0.5px;">Customer Demo — Select Table to Order:</p>
-          <div id="demoTableButtons" style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center;"></div>
-        </div>
       </div>
     </div>
   </div>
@@ -146,7 +142,24 @@
       <div id="cartLines"></div>
       <div class="total-line"><span>Total</span><span id="cartSheetTotal">₹0</span></div>
       <div id="eta"></div>
-      <button class="btn" style="width:100%" onclick="placeOrder()">Confirm & Pay</button>
+
+      <div style="margin:16px 0; text-align:left;">
+        <label style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:6px;">Select Payment Option</label>
+        <select id="payMethod" style="background:var(--panel2); color:var(--text); border:1px solid var(--border); padding:10px; border-radius:8px; width:100%; font-size:13px;" onchange="togglePayMethodUI()">
+          <option value="counter">💵 Pay at Cashier Counter (Eat First, Pay at Cashier)</option>
+          <option value="upi">📲 Pay Now via UPI (GPay / PhonePe / Paytm)</option>
+        </select>
+      </div>
+
+      <div id="upiPayContainer" class="hidden" style="text-align:center; padding:12px; background:var(--panel2); border:1px solid var(--border); border-radius:10px; margin-bottom:14px;">
+        <p style="font-size:12px; color:var(--muted); margin:0 0 8px;">Scan UPI QR Code to pay directly:</p>
+        <div id="upiQrImg" style="background:#fff; padding:8px; border-radius:8px; display:inline-block;"></div>
+        <div style="margin-top:8px;">
+          <a id="upiDeepLink" href="#" class="btn secondary" style="font-size:12px; padding:6px 12px; text-decoration:none;">📲 Pay with UPI App</a>
+        </div>
+      </div>
+
+      <button class="btn" style="width:100%" onclick="placeOrder()">Confirm Order</button>
       <button class="btn secondary" style="width:100%; margin-top:8px;" onclick="closeCart()">Keep browsing</button>
     </div>
   </div>
@@ -383,19 +396,49 @@ async function openCart() {
 
 function closeCart() { document.getElementById("cartSheet").classList.remove("open"); }
 
+function togglePayMethodUI() {
+  const method = document.getElementById("payMethod").value;
+  const container = document.getElementById("upiPayContainer");
+  if (method === "upi") {
+    const entries = Object.values(cart);
+    const total = entries.reduce((s, i) => s + i.qty * i.price, 0);
+    const upiUrl = `upi://pay?pa=orbitkitchen@upi&pn=ORBIT+Restaurant&am=${total.toFixed(2)}&cu=INR&tn=Table+Order`;
+    const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiUrl)}`;
+    document.getElementById("upiQrImg").innerHTML = `<img src="${qrImgUrl}" width="150" height="150" alt="UPI QR" style="display:block;" />`;
+    document.getElementById("upiDeepLink").href = upiUrl;
+    container.classList.remove("hidden");
+  } else {
+    container.classList.add("hidden");
+  }
+}
+
 async function placeOrder() {
   const items = Object.entries(cart).map(([id, i]) => ({ menu_item_id: id, quantity: i.qty }));
+  if (items.length === 0) return;
   if (window._addingTo) {
     const orderId = window._addingTo;
     window._addingTo = null;
     await fetch(`${API}/api/v1/orders/${orderId}/items`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items }) });
     cart = {}; closeCart(); showTracking(orderId); return;
   }
-  const res = await fetch(`${API}/api/v1/orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table_token: TOKEN, items, notes: "" }) });
+
+  const payMethod = document.getElementById("payMethod").value;
+  const notes = payMethod === "counter" ? "Pay at Cashier Counter" : "UPI Payment";
+
+  const res = await fetch(`${API}/api/v1/orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table_token: TOKEN, items, notes }) });
   const order = await res.json();
-  for (const s of ["PAYMENT_PENDING", "PAID", "RESTAURANT_ACCEPTED", "QUEUED"]) await patchStatus(order.id, s);
+
+  if (payMethod === "counter") {
+    // Eat first, pay at counter: Order accepted and queued for kitchen immediately
+    for (const s of ["RESTAURANT_ACCEPTED", "QUEUED"]) await patchStatus(order.id, s);
+  } else {
+    // UPI payment: mark paid and queue for kitchen
+    for (const s of ["PAYMENT_PENDING", "PAID", "RESTAURANT_ACCEPTED", "QUEUED"]) await patchStatus(order.id, s);
+  }
+
   currentOrderId = order.id;
   localStorage.setItem("orbit_order_id_" + TOKEN, order.id);
+  cart = {};
   closeCart();
   showTracking(order.id);
 }
@@ -601,9 +644,17 @@ function renderCashier() {
       <td>${o.code}</td><td>${o.table_id.slice(0,8)}</td>
       <td>${o.items.map(i => `${i.quantity}× ${i.name}`).join(", ")}</td>
       <td>${money(o.total_amount)}</td>
-      <td><span class="badge ${o.status}">${o.status.replaceAll("_"," ")}</span></td>
+      <td>
+        <span class="badge ${o.status}">${o.status.replaceAll("_"," ")}</span>
+        ${o.notes === "Pay at Cashier Counter" ? `<button style="margin-left:6px; font-size:11px; padding:4px 8px; border-radius:4px; border:none; background:var(--accent); color:#111; font-weight:600; cursor:pointer;" onclick="markPaidByCashier('${o.id}')">💵 Mark Paid</button>` : ""}
+      </td>
     </tr>
   `).join("") || `<tr><td colspan="5" style="text-align:center; color:var(--muted);">No orders yet.</td></tr>`;
+}
+
+async function markPaidByCashier(orderId) {
+  await patchStatus(orderId, "PAID");
+  refreshOrder(orderId);
 }
 
 function connectCashierWS() {

@@ -9,8 +9,8 @@ from .. import events
 # Explicit allowed transitions. Any transition not listed here is rejected.
 # This is the real backend enforcement of the lifecycle described in the spec.
 ALLOWED_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
-    OrderStatus.CREATED: {OrderStatus.PAYMENT_PENDING, OrderStatus.CANCELLED},
-    OrderStatus.PAYMENT_PENDING: {OrderStatus.PAID, OrderStatus.FAILED, OrderStatus.CANCELLED},
+    OrderStatus.CREATED: {OrderStatus.PAYMENT_PENDING, OrderStatus.PAID, OrderStatus.RESTAURANT_ACCEPTED, OrderStatus.CANCELLED},
+    OrderStatus.PAYMENT_PENDING: {OrderStatus.PAID, OrderStatus.RESTAURANT_ACCEPTED, OrderStatus.FAILED, OrderStatus.CANCELLED},
     OrderStatus.PAID: {OrderStatus.RESTAURANT_ACCEPTED, OrderStatus.REJECTED, OrderStatus.REFUNDED},
     OrderStatus.RESTAURANT_ACCEPTED: {OrderStatus.QUEUED, OrderStatus.CANCELLED},
     OrderStatus.QUEUED: {OrderStatus.PREPARING, OrderStatus.CANCELLED},
