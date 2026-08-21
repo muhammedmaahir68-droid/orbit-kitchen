@@ -47,9 +47,13 @@ async def health():
     return {"status": "ok"}
 
 
-# Serve the three frontend screens from the same origin as the API. This means a single
-# public URL (e.g. from ngrok) works for everything — no separate static file server,
-# no CORS complications, and the QR code + consumer app share one domain.
-_frontend_dir = os.path.join(os.path.dirname(__file__), "..", "..", "frontend")
-if os.path.isdir(_frontend_dir):
+_possible_dirs = [
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend")),
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend")),
+    os.path.abspath(os.path.join(os.getcwd(), "frontend")),
+    os.path.abspath(os.path.join(os.getcwd(), "..", "frontend")),
+]
+_frontend_dir = next((d for d in _possible_dirs if os.path.isdir(d) and os.path.exists(os.path.join(d, "index.html"))), None)
+
+if _frontend_dir:
     app.mount("/app", StaticFiles(directory=_frontend_dir, html=True), name="frontend")
